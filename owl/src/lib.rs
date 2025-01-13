@@ -15,6 +15,9 @@ pub enum ParsingError {
         expected: u8,
         got: u8,
     },
+    MultipleRootHeadings {
+        line_number: usize,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -26,21 +29,13 @@ pub struct Paragraph {
 pub enum Block {
     Heading { level: u8, body: String },
     Paragraph { body: String },
-}
-
-impl Block {
-    pub fn default_heading() -> Block {
-        Block::Heading {
-            level: 1,
-            body: "Hello World".into(),
-        }
-    }
+    Item { level: u8, body: String },
 }
 
 struct BlockParser<'a> {
     input: &'a str,
     line_number: usize,
-    heading_level: u8,
+    heading_level: Option<u8>,
 }
 
 impl<'a> BlockParser<'a> {
@@ -129,20 +124,40 @@ impl<'a> BlockParser<'a> {
             self.chop();
         }
 
-        if level > self.heading_level && level != self.heading_level + 1 {
-            return Err(ParsingError::UnexpectedHeadingLevel {
-                line_number: self.line_number,
-                expected: self.heading_level + 1,
-                got: level,
-            });
+        match self.heading_level {
+            Some(_) if level == 1 => {
+                return Err(ParsingError::MultipleRootHeadings {
+                    line_number: self.line_number,
+                });
+            }
+            Some(expected) => {
+                if level >= expected && level != expected + 1 && level != expected {
+                    return Err(ParsingError::UnexpectedHeadingLevel {
+                        line_number: self.line_number,
+                        expected: expected + 1,
+                        got: level,
+                    });
+                }
+            }
+            None => {
+                if level != 1 {
+                    return Err(ParsingError::UnexpectedHeadingLevel {
+                        line_number: self.line_number,
+                        expected: 1,
+                        got: level,
+                    });
+                }
+            }
         }
-        self.heading_level = level;
+
+        self.heading_level = Some(level);
 
         let body = match self.find_newline() {
             Some(index) => {
                 let body = self.chop_len(index).trim();
                 let body = String::from(body);
                 // chop away newline
+                assert_eq!(self.peek(), '\n');
                 self.chop();
 
                 body
@@ -150,13 +165,56 @@ impl<'a> BlockParser<'a> {
             None => String::from(self.chop_len(self.input.len()).trim()),
         };
 
-        Ok(Block::Heading{ level, body })
+        Ok(Block::Heading { level, body })
+    }
+
+    fn parse_item(&mut self) -> Result<Block, ParsingError> {
+        let mut level: u8 = 0;
+        while !self.input.is_empty() && self.peek().is_whitespace() && self.peek() != '\n' {
+            level += 1;
+            self.chop();
+        }
+
+        if level % 2 == 1 {
+            todo!();
+        }
+
+        let level = level / 2 + 1;
+
+        assert!(self.peek() == '-');
+        self.chop();
+
+        let end = match self.find_newline() {
+            Some(index) => index + 1,
+            None => self.input.len(),
+        };
+        let mut body: String = self.chop_len(end).trim().into();
+
+        let expected_space = level * 2;
+        // TODO: top limit
+        loop {
+            let mut i = 0;
+            while i < self.input.len() && self.peek_at(i) == ' ' {
+                i += 1;
+            }
+            if i != expected_space.into() {
+                break;
+            }
+            let end = match self.find_newline() {
+                Some(index) => index + 1,
+                None => self.input.len(),
+            };
+            body.push_str(" ");
+            body.push_str(self.chop_len(end).trim());
+        }
+
+        Ok(Block::Item { level, body })
     }
 
     fn new(input: &'a str) -> BlockParser<'a> {
         BlockParser {
             line_number: 1,
-            heading_level: 0,
+            heading_level: None,
             input,
         }
     }
@@ -175,8 +233,20 @@ impl<'a> Iterator for BlockParser<'a> {
             None => return None,
         };
 
+        // Skip Empty lines
+        match self.find_newline() {
+            Some(new_line_index) if new_line_index < index => {
+                self.chop_len(new_line_index);
+                assert_eq!(self.peek(), '\n');
+                self.chop();
+                return self.next();
+            }
+            _ => (),
+        }
+
         match self.peek_at(index) {
             '#' => Some(self.parse_header()),
+            '-' => Some(self.parse_item()),
             _ => todo!(),
         }
     }
