@@ -1,137 +1,201 @@
 use std::str::FromStr;
 
 #[derive(Debug)]
-pub struct Section {
-    level: u32,
-    heading: Vec<Text>,
-    body: Vec<Part>,
-}
-
-#[derive(Debug)]
-pub struct TodoSection {}
-
-#[derive(Debug)]
-pub struct Paragraph {
-    pub body: Vec<Text>,
-}
-
-#[derive(Debug)]
-pub struct Quote {}
-
-#[derive(Debug)]
-pub struct SpecialQuote {}
-
-#[derive(Debug)]
-pub struct List {
-    pub items: Vec<Paragraph>,
-}
-
-#[derive(Debug)]
-pub struct Link {
-    pub header: String,
-    pub path: String,
-}
-
-#[derive(Debug)]
-pub enum Text {
-    Plain(String),
-    Link(Link),
-}
-
-/// Part: every logical unit in a owl-markdown file is a `Part` a `Part` may consist of other
-/// `Parts`
-#[derive(Debug)]
-pub enum Part {
-    Section(Section),
-    TodoSection(TodoSection),
-    Paragraph(Paragraph),
-    Quote(Quote),
-    SpecialQuote(SpecialQuote),
-    OrderedList(List),
-    UnorderedList(List),
-}
-
 pub struct Document {
-    pub parts: Vec<Part>,
+    pub blocks: Vec<Block>,
 }
 
-#[derive(Debug)]
-enum Token {
-    Word(u32, String),
-    Pound(u32),
-    Space(u32),
-    Tab(u32),
-    NewLine(u32),
+#[derive(Debug, PartialEq, Eq)]
+pub enum ParsingError {
+    LeadingWhiteSpaceBeforeHeading {
+        line_number: usize,
+    },
+    UnexpectedHeadingLevel {
+        line_number: usize,
+        expected: u8,
+        got: u8,
+    },
 }
 
-struct Tokenizer<'a> {
-    body: &'a str,
-    line_number: u32,
+#[derive(Debug, PartialEq, Eq)]
+pub struct Paragraph {
+    pub body: String,
 }
 
-impl<'a> Tokenizer<'a> {
-    fn new(s: &'a str) -> Tokenizer<'a> {
-        Tokenizer {
-            body: s.trim(),
-            line_number: 1,
+#[derive(Debug, PartialEq, Eq)]
+pub enum Block {
+    Heading { level: u8, body: String },
+    Paragraph { body: String },
+}
+
+impl Block {
+    pub fn default_heading() -> Block {
+        Block::Heading {
+            level: 1,
+            body: "Hello World".into(),
         }
     }
 }
 
-impl<'a> Tokenizer<'a> {
-    fn peek(&self) -> char {
-        assert!(!self.body.is_empty());
-        self.body.chars().next().unwrap()
-    }
+struct BlockParser<'a> {
+    input: &'a str,
+    line_number: usize,
+    heading_level: u8,
+}
+
+impl<'a> BlockParser<'a> {
+    /// Remove first character from `self.input` and update `self.line_number` when necessary
+    ///
+    /// # Asserts
+    /// `!self.input.is_empty()`
     fn chop(&mut self) {
-        assert!(!self.body.is_empty());
-        self.body = &self.body[1..];
+        assert!(!self.input.is_empty());
+        if self.peek() == '\n' {
+            self.line_number += 1;
+        }
+        self.input = &self.input[1..];
     }
-}
 
-impl<'a> Iterator for Tokenizer<'a> {
-    type Item = Token;
+    /// find first non whitespace character in `self.input`
+    fn find_non_whitespace(&self) -> Option<usize> {
+        self.input
+            .chars()
+            .enumerate()
+            .filter(|(_, c)| !c.is_whitespace())
+            .map(|(i, _)| i)
+            .next()
+    }
 
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.body.is_empty() {
-            return None;
+    /// Chop `self.input` at `len` and return the chopped part and update `self.line_number` when
+    /// necessary
+    ///
+    /// # Asserts
+    /// `len <= self.input.len()`
+    fn chop_len(&mut self, len: usize) -> &str {
+        assert!(len <= self.input.len());
+        let chopped = &self.input[..len];
+        self.input = &self.input[len..];
+        self.line_number += chopped.chars().filter(|c| *c == '\n').count();
+        chopped
+    }
+
+    /// get first `char`
+    ///
+    /// # Asserts
+    /// `!self.input.is_empty()`
+    fn peek(&self) -> char {
+        self.peek_at(0)
+    }
+
+    /// get `char` at position `index`
+    ///
+    /// # Asserts
+    /// `self.input.len() > index`
+    fn peek_at(&self, index: usize) -> char {
+        assert!(self.input.len() > index);
+        self.input.chars().nth(index).unwrap()
+    }
+
+    /// Find the index of the next newline character
+    fn find_newline(&self) -> Option<usize> {
+        let index = self
+            .input
+            .chars()
+            .enumerate()
+            .filter(|(_, c)| *c == '\n')
+            .next();
+        match index {
+            Some((index, _)) => Some(index),
+            None => None,
         }
-        let c = self.peek();
-        match c {
-            '#' => {
-                self.chop();
-                return Some(Token::Pound(self.line_number));
-            }
-            '\n' => {
-                self.chop();
-                self.line_number += 1;
-                return Some(Token::NewLine(self.line_number));
-            }
-            ' ' => {
-                self.chop();
-                return Some(Token::Space(self.line_number));
-            }
-            '\t' => {
-                self.chop();
-                return Some(Token::Tab(self.line_number));
-            }
-            _ => (),
+    }
+
+    /// Consumes input until it generates either an `Block::Heading` or an `ParsingError`
+    ///
+    /// # Asserts
+    /// that `self.input` is not empty
+    fn parse_header(&mut self) -> Result<Block, ParsingError> {
+        assert!(!self.input.is_empty());
+        if self.peek().is_whitespace() {
+            return Err(ParsingError::LeadingWhiteSpaceBeforeHeading {
+                line_number: self.line_number,
+            });
         }
 
-        let mut word = String::new();
-        while !self.body.is_empty() && self.peek().is_alphanumeric() {
-            word.push(self.peek());
+        let mut level = 0;
+        // Chop away level indicators
+        while !self.input.is_empty() && self.peek() == '#' {
+            level += 1;
             self.chop();
         }
-        Some(Token::Word(self.line_number, word))
+
+        if level > self.heading_level && level != self.heading_level + 1 {
+            return Err(ParsingError::UnexpectedHeadingLevel {
+                line_number: self.line_number,
+                expected: self.heading_level + 1,
+                got: level,
+            });
+        }
+        self.heading_level = level;
+
+        let body = match self.find_newline() {
+            Some(index) => {
+                let body = self.chop_len(index).trim();
+                let body = String::from(body);
+                // chop away newline
+                self.chop();
+
+                body
+            }
+            None => String::from(self.chop_len(self.input.len()).trim()),
+        };
+
+        Ok(Block::Heading{ level, body })
+    }
+
+    fn new(input: &'a str) -> BlockParser<'a> {
+        BlockParser {
+            line_number: 1,
+            heading_level: 0,
+            input,
+        }
+    }
+}
+
+impl<'a> Iterator for BlockParser<'a> {
+    type Item = Result<Block, ParsingError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.input.is_empty() {
+            return None;
+        }
+
+        let index = match self.find_non_whitespace() {
+            Some(index) => index,
+            None => return None,
+        };
+
+        match self.peek_at(index) {
+            '#' => Some(self.parse_header()),
+            _ => todo!(),
+        }
     }
 }
 
 impl FromStr for Document {
-    type Err = ();
+    type Err = ParsingError;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        let tokens = Tokenizer::new(input).collect::<Vec<_>>();
-        todo!();
+        let parser = BlockParser::new(input);
+        let mut doc = Document { blocks: vec![] };
+
+        for block in parser {
+            match block {
+                Ok(block) => doc.blocks.push(block),
+                Err(err) => return Err(err),
+            }
+        }
+
+        Ok(doc)
     }
 }
