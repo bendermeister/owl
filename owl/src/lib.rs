@@ -1,271 +1,415 @@
-use std::str::FromStr;
-
-#[derive(Debug)]
-pub struct Document {
-    pub blocks: Vec<Block>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum ParsingError {
-    LeadingWhiteSpaceBeforeHeading {
-        line_number: usize,
-    },
-    UnexpectedHeadingLevel {
-        line_number: usize,
-        expected: u8,
-        got: u8,
-    },
-    MultipleRootHeadings {
-        line_number: usize,
-    },
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct Paragraph {
-    pub body: String,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum Block {
-    Heading { level: u8, body: String },
-    Paragraph { body: String },
-    Item { level: u8, body: String },
-}
-
-struct BlockParser<'a> {
-    input: &'a str,
-    line_number: usize,
-    heading_level: Option<u8>,
-}
-
-impl<'a> BlockParser<'a> {
-    /// Remove first character from `self.input` and update `self.line_number` when necessary
-    ///
-    /// # Asserts
-    /// `!self.input.is_empty()`
-    fn chop(&mut self) {
-        assert!(!self.input.is_empty());
-        if self.peek() == '\n' {
-            self.line_number += 1;
-        }
-        self.input = &self.input[1..];
+mod line {
+    #[derive(Debug, PartialEq, Eq, Copy, Clone)]
+    pub enum Line<'a> {
+        Heading { body: &'a str, level: u8 },
+        Item { body: &'a str, level: u8 },
+        Text { body: &'a str, indent: u8 },
+        Quote { body: &'a str },
+        Break,
     }
 
-    /// find first non whitespace character in `self.input`
-    fn find_non_whitespace(&self) -> Option<usize> {
-        self.input
-            .chars()
-            .enumerate()
-            .filter(|(_, c)| !c.is_whitespace())
-            .map(|(i, _)| i)
-            .next()
+    #[derive(Debug, PartialEq, Eq, Copy, Clone)]
+    pub enum Error {
+        // Heading Errors
+        HeadingWithLeadingSpace,
+
+        // Item Errors
+        ItemWithOddLeadingSpace,
+        ItemNonSpaceIndent,
+
+        // Quote Errors
+        QuoteWithLeadingSpace,
+
+        // Text Errors
+        TextWithNonSpaceIndent,
     }
 
-    /// Chop `self.input` at `len` and return the chopped part and update `self.line_number` when
-    /// necessary
-    ///
-    /// # Asserts
-    /// `len <= self.input.len()`
-    fn chop_len(&mut self, len: usize) -> &str {
-        assert!(len <= self.input.len());
-        let chopped = &self.input[..len];
-        self.input = &self.input[len..];
-        self.line_number += chopped.chars().filter(|c| *c == '\n').count();
-        chopped
-    }
-
-    /// get first `char`
-    ///
-    /// # Asserts
-    /// `!self.input.is_empty()`
-    fn peek(&self) -> char {
-        self.peek_at(0)
-    }
-
-    /// get `char` at position `index`
-    ///
-    /// # Asserts
-    /// `self.input.len() > index`
-    fn peek_at(&self, index: usize) -> char {
-        assert!(self.input.len() > index);
-        self.input.chars().nth(index).unwrap()
-    }
-
-    /// Find the index of the next newline character
-    fn find_newline(&self) -> Option<usize> {
-        let index = self
-            .input
-            .chars()
-            .enumerate()
-            .filter(|(_, c)| *c == '\n')
-            .next();
-        match index {
-            Some((index, _)) => Some(index),
-            None => None,
-        }
-    }
-
-    /// Consumes input until it generates either an `Block::Heading` or an `ParsingError`
-    ///
-    /// # Asserts
-    /// that `self.input` is not empty
-    fn parse_header(&mut self) -> Result<Block, ParsingError> {
-        assert!(!self.input.is_empty());
-        if self.peek().is_whitespace() {
-            return Err(ParsingError::LeadingWhiteSpaceBeforeHeading {
-                line_number: self.line_number,
-            });
-        }
-
-        let mut level = 0;
-        // Chop away level indicators
-        while !self.input.is_empty() && self.peek() == '#' {
-            level += 1;
-            self.chop();
-        }
-
-        match self.heading_level {
-            Some(_) if level == 1 => {
-                return Err(ParsingError::MultipleRootHeadings {
-                    line_number: self.line_number,
-                });
+    impl<'a> Line<'a> {
+        /// Parse a single line into a heading
+        ///
+        /// # Asserts
+        /// `s` is not empty
+        /// `s` starts with whitespace or an '#'
+        fn parse_heading(mut s: &'a str) -> Result<Self, Error> {
+            assert!(!s.is_empty());
+            if helper::str_at(s, 0).is_whitespace() {
+                return Err(Error::HeadingWithLeadingSpace);
             }
-            Some(expected) => {
-                if level >= expected && level != expected + 1 && level != expected {
-                    return Err(ParsingError::UnexpectedHeadingLevel {
-                        line_number: self.line_number,
-                        expected: expected + 1,
-                        got: level,
-                    });
+            assert_eq!(helper::str_at(s, 0), '#');
+
+            let mut level = 0;
+            while !s.is_empty() && helper::str_first(s) == '#' {
+                level += 1;
+                s = &s[1..];
+            }
+
+            Ok(Self::Heading {
+                body: s.trim(),
+                level,
+            })
+        }
+
+        /// Parse a single line ito an item
+        ///
+        /// # Asserts
+        /// `s` is not empty()
+        /// `s` is a single line
+        /// `s` starts with zero or more (`' '` or `'\t'`) followed by a `'-'`
+        fn parse_item(mut s: &'a str) -> Result<Self, Error> {
+            assert!(!s.is_empty());
+            assert!(helper::is_single_line(s));
+            let mut level = 0;
+            while helper::str_first(s).is_whitespace() {
+                let c = helper::str_first(s);
+                // TODO: are their other whitespace chars
+                if c != ' ' {
+                    return Err(Error::ItemNonSpaceIndent);
                 }
+                level += 1;
+                s = &s[1..];
             }
-            None => {
-                if level != 1 {
-                    return Err(ParsingError::UnexpectedHeadingLevel {
-                        line_number: self.line_number,
-                        expected: 1,
-                        got: level,
-                    });
-                }
+
+            if level % 2 == 1 {
+                return Err(Error::ItemWithOddLeadingSpace);
             }
+
+            let level = level / 2 + 1;
+
+            assert!(!s.is_empty());
+            assert_eq!(s.chars().next().unwrap(), '-');
+            s = &s[1..];
+
+            Ok(Self::Item{body: s.trim(), level})
         }
 
-        self.heading_level = Some(level);
+        /// Parse a single line into a Quote
+        ///
+        /// # Asserts
+        /// - `s` is not empty
+        /// - `s` starts with zero or more whitespace chars followed by a `'>'`
+        fn parse_quote(s: &'a str) -> Result<Self, Error> {
+            assert!(!s.is_empty());
+            assert!(helper::is_single_line(s));
 
-        let body = match self.find_newline() {
-            Some(index) => {
-                let body = self.chop_len(index).trim();
-                let body = String::from(body);
-                // chop away newline
-                assert_eq!(self.peek(), '\n');
-                self.chop();
-
-                body
+            if helper::str_first(s).is_whitespace() {
+                return Err(Error::QuoteWithLeadingSpace);
             }
-            None => String::from(self.chop_len(self.input.len()).trim()),
-        };
 
-        Ok(Block::Heading { level, body })
+            assert_eq!(helper::str_first(s), '>');
+            let s = &s[1..];
+
+            Ok(Self::Quote{body: s.trim()})
+        }
+
+        fn parse_text(mut s: &'a str) -> Result<Self, Error> {
+            assert!(!s.is_empty());
+
+            let mut indent = 0;
+            while helper::str_first(s).is_whitespace() {
+                if helper::str_first(s) != ' ' {
+                    return Err(Error::TextWithNonSpaceIndent);
+                }
+                indent += 1;
+                s = &s[1..];
+            }
+
+            Ok(Line::Text{body: s.trim(), indent})
+        }
     }
 
-    fn parse_item(&mut self) -> Result<Block, ParsingError> {
-        let mut level: u8 = 0;
-        while !self.input.is_empty() && self.peek().is_whitespace() && self.peek() != '\n' {
-            level += 1;
-            self.chop();
-        }
+    impl<'a> TryFrom<&'a str> for Line<'a> {
+        type Error = Error;
 
-        if level % 2 == 1 {
-            todo!();
-        }
-
-        let level = level / 2 + 1;
-
-        assert!(self.peek() == '-');
-        self.chop();
-
-        let end = match self.find_newline() {
-            Some(index) => index + 1,
-            None => self.input.len(),
-        };
-        let mut body: String = self.chop_len(end).trim().into();
-
-        let expected_space = level * 2;
-        // TODO: top limit
-        loop {
-            let mut i = 0;
-            while i < self.input.len() && self.peek_at(i) == ' ' {
-                i += 1;
-            }
-            if i != expected_space.into() {
-                break;
-            }
-            let end = match self.find_newline() {
-                Some(index) => index + 1,
-                None => self.input.len(),
+        fn try_from(s: &'a str) -> Result<Self, Self::Error> {
+            assert!(helper::is_single_line(s));
+            let index = match helper::find_non_whitespace(s) {
+                Some(index) => index,
+                None => return Ok(Self::Break),
             };
-            body.push_str(" ");
-            body.push_str(self.chop_len(end).trim());
-        }
 
-        Ok(Block::Item { level, body })
+            match helper::str_at(s, index) {
+                '#' => Self::parse_heading(s),
+                '-' => Self::parse_item(s),
+                '>' => Self::parse_quote(s),
+                _ => Self::parse_text(s),
+            }
+        }
     }
 
-    fn new(input: &'a str) -> BlockParser<'a> {
-        BlockParser {
-            line_number: 1,
-            heading_level: None,
-            input,
+    // Helper Functions
+    mod helper {
+        /// # Return
+        /// - `true` ... given `&str` consists of only one line
+        /// - `false` ... given `&str` doesn't consists of only one line
+        pub fn is_single_line(s: &str) -> bool {
+            s.lines().count() == 1
         }
+
+        pub fn str_at(s: &str, index: usize) -> char {
+            assert!(index < s.len());
+            s.chars().nth(index).unwrap()
+        }
+
+        pub fn str_first(s: &str) -> char {
+            str_at(s, 0)
+        }
+
+        /// # Return
+        /// - `Some(index)` index of the first non whitespace `char` in `s`
+        /// - None: `s` is only whitespace
+        pub fn find_non_whitespace(s: &str) -> Option<usize> {
+            s.chars()
+                .enumerate()
+                .filter(|(_, c)| !c.is_whitespace())
+                .map(|(i, _)| i)
+                .next()
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+
+        #[test]
+        fn heading() {
+            let line: Line = "# Hello World".try_into().unwrap();
+            let expected = Line::Heading {
+                body: "Hello World".into(),
+                level: 1,
+            };
+            assert_eq!(expected, line);
+        }
+
+        #[test]
+        fn heading_with_leading_whitespace() {
+            let result: Result<Line, _>  = " # Hello World".try_into();
+            let expected = Error::HeadingWithLeadingSpace;
+            if let Err(gotten) = result {
+                assert_eq!(expected, gotten);
+            } else {
+                panic!("Expected: {:?}, gotten: {:?}", Err::<Line, Error>(expected), result);
+            }
+        }
+
+        #[test]
+        fn item_level_1() {
+            let line: Line = "- Some Item".try_into().unwrap();
+            let expected = Line::Item{ body: "Some Item", level: 1};
+            assert_eq!(expected, line);
+        }
+
+        #[test]
+        fn item_with_odd_leading_space() {
+            let result: Result<Line, _> = "   - Some Item".try_into();
+            let expected = Error::ItemWithOddLeadingSpace;
+            if let Err(gotten) = result {
+                assert_eq!(expected, gotten);
+            } else {
+                panic!("Expected: {:?}, got: {:?}", Err::<Line, _>(expected), result);
+            }
+        }
+
+        #[test]
+        fn item_with_non_space_indent() {
+            let result: Result<Line, _> = "\t- Some Item".try_into();
+            let expected = Error::ItemNonSpaceIndent;
+
+            if let Err(gotten) = result {
+                assert_eq!(expected, gotten);
+            } else {
+                panic!("Expected: {:?}, got: {:?}", Err::<Line, _>(expected), result);
+            }
+        }
+
+        #[test]
+        fn quote() {
+            let line: Line = "> Some Quote".try_into().unwrap();
+            let expected = Line::Quote{ body: "Some Quote" };
+            assert_eq!(expected, line);
+        }
+
+        #[test]
+        fn quote_with_leading_space() {
+            let result: Result<Line, _> = " > Quote with Leading Space".try_into();
+            let expected = Error::QuoteWithLeadingSpace;
+
+            if let Err(gotten) = result {
+                assert_eq!(expected, gotten);
+            } else {
+                panic!("Expected: {:?}, got: {:?}", Err::<Line, _>(expected), result);
+            }
+        }
+
+        #[test]
+        fn text() {
+            let line: Line = "This should be some Text".try_into().unwrap();
+            let expected = Line::Text{ body: "This should be some Text", indent: 0};
+            assert_eq!(expected, line);
+        }
+
+        #[test]
+        fn text_with_indent() {
+            let line: Line = "  This should be some Text".try_into().unwrap();
+            let expected = Line::Text{ body: "This should be some Text", indent: 2};
+            assert_eq!(expected, line);
+        }
+
+        #[test]
+        fn text_with_non_space_indent() {
+            let result: Result<Line, _> = "\tThis is an Error".try_into();
+            let expected = Error::TextWithNonSpaceIndent;
+
+            if let Err(gotten) = result {
+                assert_eq!(expected, gotten);
+            } else {
+                panic!("Expected: {:?}, got: {:?}", Err::<Line, _>(expected), result);
+            }
+       }
     }
 }
 
-impl<'a> Iterator for BlockParser<'a> {
-    type Item = Result<Block, ParsingError>;
+mod liner {
+    use super::line;
+    #[derive(Debug, PartialEq, Eq, Clone)]
+    pub struct Liner<'a> {
+        lines: Vec<line::Line<'a>>,
+        index: usize,
+    }
 
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.input.is_empty() {
-            return None;
-        }
+    #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+    pub struct Item<'a> {
+        pub line_number: usize,
+        pub line: line::Line<'a>,
+    }
 
-        let index = match self.find_non_whitespace() {
-            Some(index) => index,
-            None => return None,
-        };
+    #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+    pub struct Error {
+        pub line_number: usize,
+        pub error: line::Error,
+    }
 
-        // Skip Empty lines
-        match self.find_newline() {
-            Some(new_line_index) if new_line_index < index => {
-                self.chop_len(new_line_index);
-                assert_eq!(self.peek(), '\n');
-                self.chop();
-                return self.next();
+    impl<'a> TryFrom<&'a str> for Liner<'a> {
+        type Error = Error;
+
+        fn try_from(s: &'a str) -> Result<Self, Self::Error> {
+            let mut lines = vec![];
+            for (line_number, line) in s.lines().enumerate() {
+                match line.try_into() {
+                    Ok(line) => lines.push(line),
+                    Err(error) => return Err(Error{line_number: line_number + 1, error})
+                }
             }
-            _ => (),
-        }
 
-        match self.peek_at(index) {
-            '#' => Some(self.parse_header()),
-            '-' => Some(self.parse_item()),
-            _ => todo!(),
+            Ok(Self{lines, index: 0})
         }
     }
-}
 
-impl FromStr for Document {
-    type Err = ParsingError;
+    impl<'a> Iterator for Liner<'a> {
+        type Item = Item<'a>;
 
-    fn from_str(input: &str) -> Result<Self, Self::Err> {
-        let parser = BlockParser::new(input);
-        let mut doc = Document { blocks: vec![] };
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.lines.is_empty() {
+                return None;
+            }
 
-        for block in parser {
-            match block {
-                Ok(block) => doc.blocks.push(block),
-                Err(err) => return Err(err),
+            if self.index >= self.lines.len() {
+                return None;
+            }
+
+            let index = self.index;
+            self.index += 1;
+
+            Some(Item{line_number: index + 1, line: self.lines[index]})
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+
+        use super::*;
+
+        #[test]
+        fn liner_full_1() {
+            let liner: Liner = "# Some Heading\n- Some Item\n  - Some other Item\n> Quote\nText".try_into().unwrap();
+
+            let lines: Vec<_> = liner.collect();
+
+            assert_eq!(5, lines.len());
+
+            let expected = Item{line_number: 1, line: line::Line::Heading{level: 1, body: "Some Heading"}};
+            assert_eq!(expected, lines[0]);
+
+            let expected = Item{line_number: 2, line: line::Line::Item{level: 1, body: "Some Item"}};
+            assert_eq!(expected, lines[1]);
+
+            let expected = Item{line_number: 3, line: line::Line::Item{level: 2, body: "Some other Item"}};
+            assert_eq!(expected, lines[2]);
+
+            let expected = Item{line_number: 4, line: line::Line::Quote{body: "Quote"}};
+            assert_eq!(expected, lines[3]);
+
+            let expected = Item{line_number: 5, line: line::Line::Text{indent: 0, body: "Text"}};
+            assert_eq!(expected, lines[4]);
+        }
+
+        #[test]
+        fn heading_with_leading_whitespace() {
+            let result: Result<Liner, _> = "# Some Heading\n ## Some other Heading".try_into();
+            let expected = Error{line_number: 2, error: line::Error::HeadingWithLeadingSpace};
+
+            if let Err(gotten) = result {
+                assert_eq!(expected, gotten);
+            } else {
+                panic!("Expected {:?}, got: {:?}", Err::<Liner, _>(expected), result);
             }
         }
 
-        Ok(doc)
+        #[test]
+        fn item_with_odd_leading_space() {
+            let result: Result<Liner, _> = "# Some Heading\n- First Item\n - Seond Item".try_into();
+            let expected = Error{line_number: 3, error: line::Error::ItemWithOddLeadingSpace};
+
+            if let Err(gotten) = result {
+                assert_eq!(expected, gotten);
+            } else {
+                panic!("Expected {:?}, got {:?}", Err::<Liner, _>(expected), result);
+            }
+        }
+        
+        #[test]
+        fn item_with_non_space_indent() {
+            let result: Result<Liner, _> = "# Some Heading\n\t- Item".try_into();
+            let expected = Error{line_number: 2, error: line::Error::ItemNonSpaceIndent};
+
+            if let Err(gotten) = result {
+                assert_eq!(expected, gotten);
+            } else {
+                panic!("Expected {:?}, got {:?}", Err::<Liner, _>(expected), result);
+            }
+        }
+
+        #[test]
+        fn quote_with_leading_space() {
+            let result: Result<Liner, _> = "# Some Heading\n > Quote".try_into();
+            let expected = Error{line_number: 2, error: line::Error::QuoteWithLeadingSpace};
+
+            if let Err(gotten) = result {
+                assert_eq!(expected, gotten);
+            } else {
+                panic!("Expected {:?}, got {:?}", Err::<Liner, _>(expected), result);
+            }
+        }
+
+        #[test]
+        fn text_with_non_space_indent() {
+            let result: Result<Liner, _> = "# Some Heading\n> Quote\n\tText Text Text".try_into();
+            let expected = Error{line_number: 3, error: line::Error::TextWithNonSpaceIndent};
+
+            if let Err(gotten) = result {
+                assert_eq!(expected, gotten);
+            } else {
+                panic!("Expected {:?}, got {:?}", Err::<Liner, _>(expected), result);
+            }
+        }
     }
 }
