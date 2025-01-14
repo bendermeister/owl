@@ -1,4 +1,95 @@
+mod line_indented {
+    #[derive(Debug, PartialEq, Eq, Copy, Clone)]
+    pub struct LineIndented<'a> {
+        body: &'a str,
+        pub indent: u8,
+    }
+
+    #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+    pub enum Error {
+        NonSpaceIndent,
+    }
+
+    impl<'a> Into<&'a str> for LineIndented<'a> {
+        fn into(self) -> &'a str {
+            self.body
+        }
+    }
+
+    impl<'a> TryFrom<&'a str> for LineIndented<'a> {
+        type Error = Error;
+
+        /// # Asserts
+        /// `s` is a single line
+        fn try_from(s: &'a str) -> Result<Self, Self::Error> {
+            assert_eq!(s.lines().count(), 1);
+            let mut s = s;
+            let mut indent = 0;
+            while !s.is_empty() && s.chars().next().unwrap().is_whitespace() {
+                if s.chars().next().unwrap() != ' ' {
+                    return Err(Error::NonSpaceIndent);
+                }
+                indent += 1;
+                s = &s[1..];
+            }
+            Ok(LineIndented {body: s.trim(), indent})
+        }
+    }
+
+    impl<'a> LineIndented<'a> {
+        pub fn chop(&mut self) {
+            self.body = &self.body[1..];
+        }
+
+        pub fn peek(&self) -> char {
+            assert!(!self.body.is_empty());
+            self.body.chars().next().unwrap()
+        }
+    }
+
+    impl<'a> std::ops::Deref for LineIndented<'a> {
+        type Target = &'a str;
+
+        fn deref(&self) -> &Self::Target {
+            &self.body
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+
+        #[test]
+        fn not_indented() {
+            let str: LineIndented = "Indented String".try_into().unwrap();
+            let expected = LineIndented{indent: 0, body: "Indented String"};
+            assert_eq!(expected, str);
+        }
+
+        #[test]
+        fn indented() {
+            let str: LineIndented = "    Indented String".try_into().unwrap();
+            let expected = LineIndented{indent: 4, body: "Indented String"};
+            assert_eq!(expected, str);
+        }
+
+        #[test]
+        fn indented_with_non_whitespace() {
+            let result: Result<LineIndented, _> = "\tIndented String".try_into();
+            let expected = Error::NonSpaceIndent;
+
+            if let Err(gotten) = result {
+                assert_eq!(expected, gotten);
+            } else {
+                panic!("Expected: {:?}, got: {:?}", Err::<LineIndented, _>(expected), result);
+            }
+        }
+    }
+}
+
 mod line {
+    use super::line_indented;
+    use super::line_indented::LineIndented;
     #[derive(Debug, PartialEq, Eq, Copy, Clone)]
     pub enum Line<'a> {
         Heading { body: &'a str, level: u8 },
@@ -10,18 +101,25 @@ mod line {
 
     #[derive(Debug, PartialEq, Eq, Copy, Clone)]
     pub enum Error {
+        // General Errors
+        NonSpaceIndent, 
+        
         // Heading Errors
         HeadingWithLeadingSpace,
 
         // Item Errors
         ItemWithOddLeadingSpace,
-        ItemNonSpaceIndent,
 
         // Quote Errors
         QuoteWithLeadingSpace,
+    }
 
-        // Text Errors
-        TextWithNonSpaceIndent,
+    impl From<line_indented::Error> for Error {
+        fn from(value: line_indented::Error) -> Self {
+            match value {
+                line_indented::Error::NonSpaceIndent => Error::NonSpaceIndent,
+            }
+        }
     }
 
     impl<'a> Line<'a> {
@@ -30,17 +128,18 @@ mod line {
         /// # Asserts
         /// `s` is not empty
         /// `s` starts with whitespace or an '#'
-        fn parse_heading(mut s: &'a str) -> Result<Self, Error> {
+        fn parse_heading(s: LineIndented<'a>) -> Result<Self, Error> {
+            let mut  s = s;
             assert!(!s.is_empty());
-            if helper::str_at(s, 0).is_whitespace() {
+            if s.indent > 0 {
                 return Err(Error::HeadingWithLeadingSpace);
             }
-            assert_eq!(helper::str_at(s, 0), '#');
+            assert_eq!(s.peek(), '#');
 
             let mut level = 0;
-            while !s.is_empty() && helper::str_first(s) == '#' {
+            while !s.is_empty() && s.peek() == '#' {
                 level += 1;
-                s = &s[1..];
+                s.chop();
             }
 
             Ok(Self::Heading {
@@ -55,29 +154,19 @@ mod line {
         /// `s` is not empty()
         /// `s` is a single line
         /// `s` starts with zero or more (`' '` or `'\t'`) followed by a `'-'`
-        fn parse_item(mut s: &'a str) -> Result<Self, Error> {
+        fn parse_item(s: LineIndented<'a>) -> Result<Self, Error> {
+            let mut s = s;
             assert!(!s.is_empty());
-            assert!(helper::is_single_line(s));
-            let mut level = 0;
-            while helper::str_first(s).is_whitespace() {
-                let c = helper::str_first(s);
-                // TODO: are their other whitespace chars
-                if c != ' ' {
-                    return Err(Error::ItemNonSpaceIndent);
-                }
-                level += 1;
-                s = &s[1..];
-            }
+            let level = s.indent;
 
             if level % 2 == 1 {
                 return Err(Error::ItemWithOddLeadingSpace);
             }
-
             let level = level / 2 + 1;
 
             assert!(!s.is_empty());
-            assert_eq!(s.chars().next().unwrap(), '-');
-            s = &s[1..];
+            assert_eq!(s.peek(), '-');
+            s.chop();
 
             Ok(Self::Item{body: s.trim(), level})
         }
@@ -87,33 +176,23 @@ mod line {
         /// # Asserts
         /// - `s` is not empty
         /// - `s` starts with zero or more whitespace chars followed by a `'>'`
-        fn parse_quote(s: &'a str) -> Result<Self, Error> {
+        fn parse_quote(s: LineIndented<'a>) -> Result<Self, Error> {
+            let mut s = s;
             assert!(!s.is_empty());
-            assert!(helper::is_single_line(s));
 
-            if helper::str_first(s).is_whitespace() {
+            if s.indent > 0 {
                 return Err(Error::QuoteWithLeadingSpace);
             }
 
-            assert_eq!(helper::str_first(s), '>');
-            let s = &s[1..];
+            assert_eq!(s.peek(), '>');
+            s.chop();
 
             Ok(Self::Quote{body: s.trim()})
         }
 
-        fn parse_text(mut s: &'a str) -> Result<Self, Error> {
+        fn parse_text(s: LineIndented<'a>) -> Result<Self, Error> {
             assert!(!s.is_empty());
-
-            let mut indent = 0;
-            while helper::str_first(s).is_whitespace() {
-                if helper::str_first(s) != ' ' {
-                    return Err(Error::TextWithNonSpaceIndent);
-                }
-                indent += 1;
-                s = &s[1..];
-            }
-
-            Ok(Line::Text{body: s.trim(), indent})
+            Ok(Line::Text{body: s.trim(), indent: s.indent})
         }
     }
 
@@ -121,48 +200,21 @@ mod line {
         type Error = Error;
 
         fn try_from(s: &'a str) -> Result<Self, Self::Error> {
-            assert!(helper::is_single_line(s));
-            let index = match helper::find_non_whitespace(s) {
-                Some(index) => index,
-                None => return Ok(Self::Break),
+            let line: LineIndented = match s.try_into() {
+                Ok(line) => line,
+                Err(err) => return Err(err.into()),
             };
 
-            match helper::str_at(s, index) {
-                '#' => Self::parse_heading(s),
-                '-' => Self::parse_item(s),
-                '>' => Self::parse_quote(s),
-                _ => Self::parse_text(s),
+            if line.is_empty() {
+                return Ok(Line::Break);
             }
-        }
-    }
 
-    // Helper Functions
-    mod helper {
-        /// # Return
-        /// - `true` ... given `&str` consists of only one line
-        /// - `false` ... given `&str` doesn't consists of only one line
-        pub fn is_single_line(s: &str) -> bool {
-            s.lines().count() == 1
-        }
-
-        pub fn str_at(s: &str, index: usize) -> char {
-            assert!(index < s.len());
-            s.chars().nth(index).unwrap()
-        }
-
-        pub fn str_first(s: &str) -> char {
-            str_at(s, 0)
-        }
-
-        /// # Return
-        /// - `Some(index)` index of the first non whitespace `char` in `s`
-        /// - None: `s` is only whitespace
-        pub fn find_non_whitespace(s: &str) -> Option<usize> {
-            s.chars()
-                .enumerate()
-                .filter(|(_, c)| !c.is_whitespace())
-                .map(|(i, _)| i)
-                .next()
+            match line.peek() {
+                '#' => Self::parse_heading(line),
+                '-' => Self::parse_item(line),
+                '>' => Self::parse_quote(line),
+                _ => Self::parse_text(line),
+            }
         }
     }
 
@@ -212,7 +264,7 @@ mod line {
         #[test]
         fn item_with_non_space_indent() {
             let result: Result<Line, _> = "\t- Some Item".try_into();
-            let expected = Error::ItemNonSpaceIndent;
+            let expected = Error::NonSpaceIndent;
 
             if let Err(gotten) = result {
                 assert_eq!(expected, gotten);
@@ -257,7 +309,7 @@ mod line {
         #[test]
         fn text_with_non_space_indent() {
             let result: Result<Line, _> = "\tThis is an Error".try_into();
-            let expected = Error::TextWithNonSpaceIndent;
+            let expected = Error::NonSpaceIndent;
 
             if let Err(gotten) = result {
                 assert_eq!(expected, gotten);
@@ -379,7 +431,7 @@ mod liner {
         #[test]
         fn item_with_non_space_indent() {
             let result: Result<Liner, _> = "# Some Heading\n\t- Item".try_into();
-            let expected = Error{line_number: 2, error: line::Error::ItemNonSpaceIndent};
+            let expected = Error{line_number: 2, error: line::Error::NonSpaceIndent};
 
             if let Err(gotten) = result {
                 assert_eq!(expected, gotten);
@@ -403,7 +455,7 @@ mod liner {
         #[test]
         fn text_with_non_space_indent() {
             let result: Result<Liner, _> = "# Some Heading\n> Quote\n\tText Text Text".try_into();
-            let expected = Error{line_number: 3, error: line::Error::TextWithNonSpaceIndent};
+            let expected = Error{line_number: 3, error: line::Error::NonSpaceIndent};
 
             if let Err(gotten) = result {
                 assert_eq!(expected, gotten);
@@ -412,4 +464,7 @@ mod liner {
             }
         }
     }
+}
+
+mod blocker {
 }
