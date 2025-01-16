@@ -1,7 +1,7 @@
+use super::ErrorType;
 use super::Event;
 use super::SingleLine;
 use super::Trait;
-use super::ErrorType;
 
 #[derive(Debug, Clone)]
 enum State {
@@ -55,25 +55,25 @@ impl<'a> Iterator for Text<'a> {
                     return Some(Ok(Event::WhiteSpace(c)));
                 }
 
-                match c {
-                    ']' => {
-                        self.line.chop();
-                        if self.line.peek().is_some() && self.line.peek().unwrap() == '(' {
-                            self.state = State::Link;
+                if !c.is_alphanumeric() {
+                    match c {
+                        ']' => {
+                            self.line.chop();
+                            if self.line.peek().is_some() && self.line.peek().unwrap() == '(' {
+                                self.state = State::Link;
+                            }
+                            return Some(Ok(Event::Special(']')));
                         }
-                        return Some(Ok(Event::Special(']')));
+                        _ => (),
                     }
-                    '[' => {
-                        self.line.chop();
-                        return Some(Ok(Event::Special('[')));
-                    },
-                    _ => (),
+                    self.line.chop();
+                    return Some(Ok(Event::Special(c)));
                 }
 
                 let mut body = String::new();
 
                 let mut c = self.line.peek();
-                while c.is_some() && !c.unwrap().is_whitespace() {
+                while c.is_some() && c.unwrap().is_alphanumeric() {
                     body.push(c.unwrap());
                     self.line.chop();
                     c = self.line.peek();
@@ -87,7 +87,10 @@ impl<'a> Iterator for Text<'a> {
 
 impl<'a> From<SingleLine<'a>> for Text<'a> {
     fn from(line: SingleLine<'a>) -> Self {
-        Self { line, state: State::Start }
+        Self {
+            line,
+            state: State::Start,
+        }
     }
 }
 
@@ -98,7 +101,11 @@ mod test {
     #[test]
     fn link() {
         let line: SingleLine = "[word](destination)".into();
-        let text: Text = line.into();
+        let mut text: Text = line.into();
+
+        let got = text.next().unwrap().unwrap();
+        let expected = Event::Text;
+        assert_eq!(expected, got);
 
         let got = text.next().unwrap().unwrap();
         let expected = Event::Special('[');
