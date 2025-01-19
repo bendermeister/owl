@@ -14,6 +14,15 @@ pub(super) enum Event<'a> {
     Quote(&'a str),
 }
 
+impl<'a> Event<'a> {
+    pub(super) fn is_indent(&self) -> bool {
+        match self {
+            Event::Indent(_) => true,
+            _ => false,
+        }
+    }
+}
+
 pub(super) fn parse<'a>(buf: &'a str) -> Vec<Event<'a>> {
     let mut event = vec![];
     let mut buf = buf;
