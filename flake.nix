@@ -22,6 +22,7 @@
             rust-analyzer
             sqlitebrowser
             sqlite
+            gdb
           ];
         };
       }

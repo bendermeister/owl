@@ -24,6 +24,8 @@ fn get_migrations() -> Vec<Box<dyn Migration>> {
     vec![
         Box::new(BaseMigration {}),
         Box::new(migrations::Migration000 {}),
+        Box::new(migrations::Migration001 {}),
+        Box::new(migrations::Migration002 {})
     ]
 }
 
