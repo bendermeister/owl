@@ -4,3 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.97"
+chrono = "0.4.40"
+clear = "0.1.0"
+rusqlite = { version = "0.34.0", features = ["bundled"] }
+mittelmeer = { path = "../mittelmeer" }
