@@ -1,7 +1,8 @@
+use crate::id::ID;
 use crate::timestamp::TimeStamp;
 use crate::todo::Todo;
-use std::path::Path;
 use std::collections::HashMap;
+use std::path::Path;
 
 pub fn todo_exists(db: &rusqlite::Connection, todo: &Todo) -> Result<bool, anyhow::Error> {
     let mut stmt = db.prepare("SELECT EXISTS(SELECT 1 FROM todo WHERE id = ? LIMIT 1);")?;
@@ -76,13 +77,36 @@ pub fn todo_fetch_all(db: &rusqlite::Connection) -> Result<Vec<Todo>, anyhow::Er
         .collect()
 }
 
-pub fn todo_path_map(db: &rusqlite::Connection) -> Result<()>
+pub fn todo_path_map(
+    db: &rusqlite::Connection,
+) -> Result<HashMap<ID<Todo>, (String, TimeStamp)>, anyhow::Error> {
+    let mut stmt = db.prepare(
+        "
+        SELECT id, path, last_change FROM todo;
+        ",
+    )?;
+
+    let v: Result<Vec<(ID<Todo>, String, TimeStamp)>, anyhow::Error> = stmt
+        .query([])?
+        .and_then(|row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .collect();
+
+    let v = v?;
+
+    let mut map = HashMap::new();
+
+    for (id, path, stamp) in v.into_iter() {
+        map.insert(id, (path, stamp));
+    }
+
+    Ok(map)
+}
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::path::PathBuf;
     use crate::id::ID;
+    use std::path::PathBuf;
 
     #[test]
     fn test_todo_exists() {
@@ -144,5 +168,21 @@ mod test {
         let mut got = todo_fetch_all(&db).unwrap();
         got.sort_by(|a, b| a.title.cmp(&b.title));
         assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn test_todo_path_map() {
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        mittelmeer::migrate(&db).unwrap();
+
+        let map = todo_path_map(&db).unwrap();
+        assert_eq!(0, map.len());
+
+        let todo = Todo::new("hello".into());
+        todo_insert(&db, &todo, &PathBuf::new()).unwrap();
+
+        let map = todo_path_map(&db).unwrap();
+        assert_eq!(1, map.len());
+        assert!(map.get(&todo.id).is_some());
     }
 }

@@ -1,11 +1,18 @@
 use rusqlite::types::{FromSql, ToSql, ToSqlOutput};
 use std::fmt::Display;
+use std::hash::Hash;
 use std::marker::PhantomData;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ID<T> {
     id: i64,
     marker: PhantomData<T>,
+}
+
+impl<T> Hash for ID<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state)
+    }
 }
 
 impl<T> Clone for ID<T> {

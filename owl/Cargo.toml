@@ -9,3 +9,6 @@ chrono = "0.4.40"
 clear = "0.1.0"
 rusqlite = { version = "0.34.0", features = ["bundled"] }
 mittelmeer = { path = "../mittelmeer" }
+clap = { version = "4.5.35", features = ["derive"] }
+features = "0.10.0"
+derive = "1.0.0"

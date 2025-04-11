@@ -48,6 +48,18 @@ impl TimeStamp {
     }
 }
 
+impl TryFrom<std::time::SystemTime> for TimeStamp {
+    type Error = anyhow::Error;
+
+    fn try_from(time: std::time::SystemTime) -> Result<Self, Self::Error> {
+        let stamp: i64 = time
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)?
+            .as_secs()
+            .try_into()?;
+        Ok(Self::new(stamp))
+    }
+}
+
 impl Display for TimeStamp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // TODO: the unwrap here is not good

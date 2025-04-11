@@ -60,13 +60,11 @@ impl Todo {
         self.closed = None;
 
         for line in body {
-            if line.starts_with("> OPENED:") {
-                let line = &line[9..];
-                self.opened = line.parse()?;
+            if let Some(stamp) = line.strip_prefix("> OPENED:") {
+                self.opened = stamp.trim().parse()?;
             }
-            if line.starts_with("> CLOSED:") {
-                let line = &line[9..];
-                self.closed = Some(line.parse()?);
+            if let Some(stamp) = line.strip_prefix("> CLOSED:") {
+                self.closed = Some(stamp.trim().parse()?);
             }
         }
 
