@@ -1,9 +1,8 @@
-use chrono::DateTime;
-use chrono::Local;
 use chrono::prelude::*;
-use rusqlite::types::{FromSql, ToSql, ToSqlOutput};
-use std::fmt::Display;
+use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
+use rusqlite::types::{FromSql, ToSql, ToSqlOutput, Value};
 use std::str::FromStr;
+use std::fmt::Display;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TimeStamp {
@@ -11,52 +10,41 @@ pub struct TimeStamp {
 }
 
 impl TimeStamp {
-    pub fn now() -> Self {
-        Self::new(chrono::Utc::now().timestamp())
-    }
-
+    /// Create a new TimeStamp
     pub fn new(stamp: i64) -> Self {
         Self { stamp }
     }
 
-    pub fn from_ymd_hms(
+    /// Creates a new Timestamp from the current time
+    pub fn now() -> Self {
+        Self::new(chrono::Local::now().timestamp())
+    }
+
+    /// Creates a new TimeStamp from a given date
+    pub fn from_ymd(year: i32, month: u32, day: u32) -> Result<Self, anyhow::Error> {
+        Self::from_ymd_hm(year, month, day, 0, 0)
+    }
+
+    pub fn from_ymd_hm(
         year: i32,
         month: u32,
         day: u32,
         hour: u32,
         minute: u32,
     ) -> Result<Self, anyhow::Error> {
-        let time = match NaiveTime::from_hms_opt(hour, minute, 0) {
-            Some(time) => time,
-            None => return Err(anyhow::anyhow!("timestamp does not exist")),
-        };
 
         let date = match NaiveDate::from_ymd_opt(year, month, day) {
             Some(date) => date,
-            None => return Err(anyhow::anyhow!("timestamp does not exist")),
+            None => return Err(anyhow::anyhow!("provided date is not a date")),
         };
 
-        let date = match NaiveDateTime::new(date, time)
-            .and_local_timezone(Local)
-            .earliest()
-        {
-            Some(date) => date,
-            None => return Err(anyhow::anyhow!("timestamp does not exist")),
+        let time = match NaiveTime::from_hms_opt(hour, minute, 0) {
+            Some(time) => time,
+            None => return Err(anyhow::anyhow!("provided time is not a time")),
         };
 
-        Ok(Self::new(date.timestamp()))
-    }
-}
-
-impl TryFrom<std::time::SystemTime> for TimeStamp {
-    type Error = anyhow::Error;
-
-    fn try_from(time: std::time::SystemTime) -> Result<Self, Self::Error> {
-        let stamp: i64 = time
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)?
-            .as_secs()
-            .try_into()?;
-        Ok(Self::new(stamp))
+        let datetime = NaiveDateTime::new(date, time);
+        Ok(datetime.and_local_timezone(chrono::Local).unwrap().into())
     }
 }
 
@@ -80,19 +68,6 @@ impl Display for TimeStamp {
         )?;
 
         Ok(())
-    }
-}
-
-impl ToSql for TimeStamp {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-        self.stamp.to_sql()
-    }
-}
-
-impl FromSql for TimeStamp {
-    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
-        let stamp = <i64 as FromSql>::column_result(value)?;
-        Ok(Self::new(stamp))
     }
 }
 
@@ -153,7 +128,7 @@ impl FromStr for TimeStamp {
             return Err(err);
         }
 
-        let stamp = TimeStamp::from_ymd_hms(
+        let stamp = TimeStamp::from_ymd_hm(
             year.parse()?,
             month.parse()?,
             day.parse()?,
@@ -165,13 +140,53 @@ impl FromStr for TimeStamp {
     }
 }
 
+impl<Tz> From<DateTime<Tz>> for TimeStamp
+where
+    Tz: chrono::TimeZone,
+{
+    fn from(value: DateTime<Tz>) -> Self {
+        Self::new(value.timestamp())
+    }
+}
+
+impl From<TimeStamp> for i64 {
+    fn from(value: TimeStamp) -> Self {
+        value.stamp
+    }
+}
+
+impl From<TimeStamp> for DateTime<chrono::Local> {
+    fn from(value: TimeStamp) -> Self {
+        DateTime::from_timestamp(value.stamp, 0).unwrap().into()
+    }
+}
+
+impl From<i64> for TimeStamp {
+    fn from(value: i64) -> Self {
+        Self::new(value)
+    }
+}
+
+impl FromSql for TimeStamp {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        let stamp: i64 = <i64 as FromSql>::column_result(value)?;
+        Ok(Self::new(stamp))
+    }
+}
+
+impl ToSql for TimeStamp {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::Owned(Value::Integer(self.stamp)))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
     fn test_to_string() {
-        let stamp = TimeStamp::from_ymd_hms(2024, 02, 03, 12, 13).unwrap();
+        let stamp = TimeStamp::from_ymd_hm(2024, 02, 03, 12, 13).unwrap();
 
         let got = stamp.to_string();
         let expected = "<2024-02-03 12:13>";
@@ -180,7 +195,7 @@ mod test {
 
     #[test]
     fn test_from_str() {
-        let expected = TimeStamp::from_ymd_hms(2024, 02, 03, 12, 13).unwrap();
+        let expected = TimeStamp::from_ymd_hm(2024, 02, 03, 12, 13).unwrap();
         let got = expected.to_string().parse().unwrap();
         assert_eq!(expected, got);
 

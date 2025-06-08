@@ -1,5 +1,9 @@
-[workspace]
-resolver = "2"
+[package]
+name = "owl"
+version = "0.1.0"
+edition = "2024"
 
-members = [ "mittelmeer","owl" 
-]
+[dependencies]
+anyhow = "1.0.98"
+chrono = "0.4.41"
+rusqlite = { version = "0.36.0", features = ["bundled"] }
