@@ -19,7 +19,7 @@ impl Todo {
     }
 }
 
-pub fn read_dir(path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
+fn read_dir(path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
     if !path.is_dir() {
         return Err(anyhow::anyhow!("can't treat file as directory"));
     }
@@ -44,12 +44,20 @@ pub fn read_dir(path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
     Ok(buf)
 }
 
-pub fn read_file(path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
+pub fn get_all(path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
+    if path.is_dir() {
+        read_dir(path)
+    } else {
+        read_file(path)
+    }
+}
+
+fn read_file(path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
     let body = fs::read_to_string(path)?;
     read_body(&body)
 }
 
-pub fn read_body(body: &str) -> Result<Vec<Todo>, anyhow::Error> {
+fn read_body(body: &str) -> Result<Vec<Todo>, anyhow::Error> {
     let mut buf = Vec::new();
 
     for line in body.lines() {

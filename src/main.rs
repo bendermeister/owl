@@ -1,3 +1,7 @@
+use owl::cli;
+use owl::context::get_context;
+
 fn main() {
-    println!("Hello, world!");
+    let context = get_context().unwrap();
+    cli::run(context).unwrap();
 }

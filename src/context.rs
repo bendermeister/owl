@@ -12,12 +12,12 @@ pub struct Context {
 }
 
 pub fn get_context() -> Result<Context, anyhow::Error> {
-    let owl_dir: String = std::env::var("OWL_DIR")?;
-
-    let mut owl_dir: PathBuf = if owl_dir.trim().is_empty() {
-        std::env::current_dir()?
-    } else {
-        owl_dir.into()
+    let mut owl_dir: PathBuf = match std::env::var("OWL_DIR") {
+        Ok(dir) => dir.into(),
+        Err(e) => match e {
+            std::env::VarError::NotPresent => std::env::current_dir()?,
+            std::env::VarError::NotUnicode(_) => return Err(anyhow::anyhow!("error is not unicode")),
+        }
     };
 
     owl_dir.push("owl.toml");
