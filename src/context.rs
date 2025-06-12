@@ -11,6 +11,14 @@ struct ContextRaw {
 pub struct Context {
     pub tags: Vec<String>,
     pub db: rusqlite::Connection,
+    pub output_format: OutputFormat,
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum OutputFormat {
+    Colorful,
+    Plain,
+    Json,
 }
 
 pub fn get_context(mut owl_dir: PathBuf) -> Result<Context, anyhow::Error> {
@@ -28,7 +36,8 @@ pub fn get_context(mut owl_dir: PathBuf) -> Result<Context, anyhow::Error> {
 
     let context = Context {
         tags: context_raw.tags,
-        db: db,
+        db,
+        output_format: OutputFormat::Colorful,
     };
 
     Ok(context)

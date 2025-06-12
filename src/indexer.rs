@@ -1,6 +1,6 @@
 use crate::stemmer;
+use crate::time_stamp::TimeStamp;
 use crate::todo;
-use crate::types::time_stamp::TimeStamp;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -140,14 +140,14 @@ fn discover(
 fn get_or_insert_term(db: &rusqlite::Connection, term: &str) -> Result<i64, anyhow::Error> {
     let exists: bool = db
         .prepare_cached("SELECT EXISTS (SELECT 1 FROM terms WHERE term = ?);")?
-        .query_row(rusqlite::params![term], |row| Ok(row.get(0)?))?;
+        .query_row(rusqlite::params![term], |row| row.get(0))?;
 
     let id: i64 = if !exists {
         db.prepare_cached("INSERT INTO terms (term) VALUES(?) RETURNING id;")?
-            .query_row(rusqlite::params![term], |row| Ok(row.get(0)?))?
+            .query_row(rusqlite::params![term], |row| row.get(0))?
     } else {
         db.prepare_cached("SELECT id FROM terms WHERE term = ?;")?
-            .query_row(rusqlite::params![term], |row| Ok(row.get(0)?))?
+            .query_row(rusqlite::params![term], |row| row.get(0))?
     };
 
     Ok(id)
@@ -159,13 +159,13 @@ fn index_file(db: &rusqlite::Connection, path: &Path) -> Result<(), anyhow::Erro
         Err(e) => return Err(anyhow::anyhow!("could not convert path to string: {:?}", e)),
     };
 
-    let mtime: TimeStamp = fs::metadata(&path)?.modified()?.into();
+    let mtime: TimeStamp = fs::metadata(path)?.modified()?.into();
 
     let file_id: i64 = db
         .prepare_cached("INSERT INTO files (path, last_touched) VALUES(?, ?) RETURNING id;")?
-        .query_row(rusqlite::params![&file_str, mtime], |row| Ok(row.get(0)?))?;
+        .query_row(rusqlite::params![&file_str, mtime], |row| row.get(0))?;
 
-    let body = fs::read_to_string(&path)?;
+    let body = fs::read_to_string(path)?;
 
     let todos = todo::parse_todos(&body)?;
 
@@ -185,7 +185,7 @@ fn index_file(db: &rusqlite::Connection, path: &Path) -> Result<(), anyhow::Erro
 
     let mut count = 0;
 
-    for term in body.trim().split_whitespace() {
+    for term in body.split_whitespace() {
         let term = stemmer::stem(term);
         *histogram.entry(term).or_insert(0) += 1;
         count += 1;
@@ -205,6 +205,5 @@ fn index_file(db: &rusqlite::Connection, path: &Path) -> Result<(), anyhow::Erro
 pub fn index(db: &rusqlite::Connection, dir: fs::ReadDir) -> Result<(), anyhow::Error> {
     discover(db, dir)?
         .into_iter()
-        .map(|path| index_file(db, &path))
-        .collect()
+        .try_for_each(|path| index_file(db, &path))
 }

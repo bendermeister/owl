@@ -1,6 +1,6 @@
-use crate::types::time_stamp::TimeStamp;
+use crate::time_stamp::TimeStamp;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Todo {
     pub title: String,
     pub deadline: Option<TimeStamp>,
