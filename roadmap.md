@@ -1,12 +1,12 @@
 # Roadmap
 
 ## TF-IDF
-- [ ] File Indexer
-  - [ ] discover all files in a given directory 
-  - [ ] filter all files which not have been touched since last dicovery
-  - [ ] apply a function to all files 
-  - [ ] update files in database
-- [ ] TF-IDF
+- [X] File Indexer
+  - [X] discover all files in a given directory 
+  - [X] filter all files which not have been touched since last dicovery
+  - [X] apply a function to all files 
+  - [X] update files in database
+- [X] TF-IDF
   - General Description:
     **TF(t: Word, d: Document)**: d.count(t) / d.len()
     **IDF(t: Word, d: &[Document])**: log(d.len() / d.iter().filter(|d| d.contains(t)).count())
