@@ -1,5 +1,5 @@
 use owl::cli;
 
 fn main() {
-    cli::run();
+    cli::run().unwrap();
 }

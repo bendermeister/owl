@@ -23,9 +23,7 @@ impl Migration for BaseMigration {
 fn get_migrations() -> Vec<Box<dyn Migration>> {
     vec![
         Box::new(BaseMigration {}),
-        Box::new(migrations::Migration000 {}),
-        Box::new(migrations::Migration001 {}),
-        Box::new(migrations::Migration002 {})
+        Box::new(migrations::Migration0001 {}),
     ]
 }
 
@@ -62,9 +60,8 @@ pub fn migrate(db: &rusqlite::Connection) -> Result<(), anyhow::Error> {
 #[cfg(test)]
 mod test {
     use super::*;
-
     #[test]
-    fn test_migration() {
+    fn test_migrate() {
         let db = rusqlite::Connection::open_in_memory().unwrap();
         migrate(&db).unwrap();
     }

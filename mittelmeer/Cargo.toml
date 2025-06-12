@@ -1,8 +1,0 @@
-[package]
-name = "mittelmeer"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-anyhow = "1.0.97"
-rusqlite = { version = "0.34.0", features = ["bundled"] }
