@@ -1,3 +1,6 @@
 pub fn stem(s: &str) -> String {
-    todo!()
+    s.chars()
+        .filter(|c| c.is_alphabetic())
+        .flat_map(|c| c.to_lowercase())
+        .collect()
 }

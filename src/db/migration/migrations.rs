@@ -37,13 +37,13 @@ impl Migration for Migration0001 {
         )?;
 
         db.execute(
-            "CREATE TABLE todo (
+            "CREATE TABLE todos (
                 file        INTEGER NOT NULL,
                 title       TEXT NOT NULL,
                 deadline    INTEGER,
                 scheduled   INTEGER,
 
-                FOREIGN KEY(file) REFERENCES file(id)
+                FOREIGN KEY(file) REFERENCES files(id)
             );",
             rusqlite::params![],
         )?;

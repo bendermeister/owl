@@ -1,36 +1,35 @@
+use crate::db;
+use crate::indexer;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct ContextRaw {
-    todo_path: String,
     tags: Vec<String>,
 }
 
+#[derive(Debug)]
 pub struct Context {
-    pub todo_path: PathBuf,
     pub tags: Vec<String>,
+    pub db: rusqlite::Connection,
 }
 
-pub fn get_context() -> Result<Context, anyhow::Error> {
-    let mut owl_dir: PathBuf = match std::env::var("OWL_DIR") {
-        Ok(dir) => dir.into(),
-        Err(e) => match e {
-            std::env::VarError::NotPresent => std::env::current_dir()?,
-            std::env::VarError::NotUnicode(_) => return Err(anyhow::anyhow!("error is not unicode")),
-        }
-    };
-
+pub fn get_context(mut owl_dir: PathBuf) -> Result<Context, anyhow::Error> {
     owl_dir.push("owl.toml");
     let context_raw = std::fs::read_to_string(&owl_dir)?;
+    let context_raw: ContextRaw = toml::from_str(&context_raw)?;
     owl_dir.pop();
 
-    let context_raw: ContextRaw = toml::from_str(&context_raw)?;
+    owl_dir.push("owl.sqlite");
+    let db = rusqlite::Connection::open(&owl_dir)?;
+    db::migration::migrate(&db)?;
+    owl_dir.pop();
 
-    let mut context = Context {
-        todo_path: owl_dir.clone(),
+    indexer::index(&db, std::fs::read_dir(&owl_dir).unwrap())?;
+
+    let context = Context {
         tags: context_raw.tags,
+        db: db,
     };
 
-    context.todo_path.push(&context_raw.todo_path);
     Ok(context)
 }

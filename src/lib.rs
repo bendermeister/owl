@@ -6,3 +6,4 @@ pub mod cli;
 pub mod table;
 pub mod indexer;
 pub mod stemmer;
+pub mod tfidf;

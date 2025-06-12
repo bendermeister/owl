@@ -11,33 +11,47 @@ struct File {
     last_touched: TimeStamp,
 }
 
-fn discover_dir_files(dir: fs::ReadDir) -> Result<Vec<File>, anyhow::Error> {
+fn discover_paths(dir: fs::ReadDir) -> Result<Vec<PathBuf>, anyhow::Error> {
     let mut buf = Vec::new();
+
     for entry in dir {
         let entry = entry?;
         let path = entry.path();
-
         if path.is_dir() {
-            let mut files = discover_dir_files(fs::read_dir(&path)?)?;
-            buf.append(&mut files);
+            let mut sub_dir = discover_paths(fs::read_dir(path)?)?;
+            buf.append(&mut sub_dir);
         } else {
-            let meta = fs::metadata(&path)?;
-            let last_touched = meta.modified()?.into();
-            let file = File {
-                id: 0,
-                path: match path.into_os_string().into_string() {
-                    Ok(path) => path,
-                    Err(e) => {
-                        return Err(anyhow::anyhow!("could not convert path to string: {:?}", e));
-                    }
-                },
-                last_touched,
-            };
-            buf.push(file);
+            buf.push(path);
         }
     }
 
     Ok(buf)
+}
+
+fn discover_files(dir: fs::ReadDir) -> Result<Vec<File>, anyhow::Error> {
+    let paths = discover_paths(dir)?;
+    paths
+        .into_iter()
+        .filter(|path| match path.extension() {
+            Some(ext) => ext == "md",
+            None => false,
+        })
+        .map(|path| {
+            Ok(File {
+                id: 0,
+                path: match path.clone().into_os_string().into_string() {
+                    Ok(str) => str,
+                    Err(e) => {
+                        return Err(anyhow::anyhow!(
+                            "could not turn path: '{:?}' into utf8-string",
+                            e
+                        ));
+                    }
+                },
+                last_touched: fs::metadata(&path)?.modified()?.into(),
+            })
+        })
+        .collect()
 }
 
 fn fetch_db_files(db: &rusqlite::Connection) -> Result<Vec<File>, anyhow::Error> {
@@ -57,7 +71,7 @@ fn delete_files_from_db(db: &rusqlite::Connection, files: &[i64]) -> Result<(), 
     for file in files.iter() {
         db.prepare_cached("DELETE FROM term_frequencies WHERE file = ?;")?
             .execute(rusqlite::params![file])?;
-        db.prepare_cached("DELETE FROM todo WHERE file = ?;")?
+        db.prepare_cached("DELETE FROM todos WHERE file = ?;")?
             .execute(rusqlite::params![file])?;
         db.prepare_cached("DELETE FROM files WHERE id = ?;")?
             .execute(rusqlite::params![file])?;
@@ -89,7 +103,7 @@ fn discover(
     dir: std::fs::ReadDir,
 ) -> Result<Vec<PathBuf>, anyhow::Error> {
     let db_files = fetch_db_files(db)?;
-    let dir_files = discover_dir_files(dir)?;
+    let dir_files = discover_files(dir)?;
 
     db_garbage_collect(db, &dir_files, &db_files)?;
 
@@ -109,7 +123,12 @@ fn discover(
         })
         .collect();
 
-    let ids: Vec<_> = files.iter().map(|file| file.id).collect();
+    let ids: Vec<_> = files
+        .iter()
+        .map(|file| db_files_map.get(file.path.as_str()))
+        .filter(|file| file.is_some())
+        .map(|file| file.unwrap().id)
+        .collect();
 
     delete_files_from_db(db, &ids)?;
 
@@ -150,7 +169,7 @@ fn index_file(db: &rusqlite::Connection, path: &Path) -> Result<(), anyhow::Erro
 
     let todos = todo::parse_todos(&body)?;
 
-    for todo in todos {
+    for todo in todos.iter() {
         db.prepare_cached(
             "INSERT INTO todos (file, title, deadline, scheduled) VALUES(?, ?, ?, ?);",
         )?
