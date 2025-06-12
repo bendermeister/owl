@@ -1,8 +1,9 @@
 use chrono::prelude::*;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 use rusqlite::types::{FromSql, ToSql, ToSqlOutput, Value};
-use std::str::FromStr;
 use std::fmt::Display;
+use std::str::FromStr;
+use std::time::SystemTime;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TimeStamp {
@@ -32,7 +33,6 @@ impl TimeStamp {
         hour: u32,
         minute: u32,
     ) -> Result<Self, anyhow::Error> {
-
         let date = match NaiveDate::from_ymd_opt(year, month, day) {
             Some(date) => date,
             None => return Err(anyhow::anyhow!("provided date is not a date")),
@@ -68,6 +68,22 @@ impl Display for TimeStamp {
         )?;
 
         Ok(())
+    }
+}
+
+impl From<SystemTime> for TimeStamp {
+    fn from(t: SystemTime) -> Self {
+        let sec = match t.duration_since(std::time::UNIX_EPOCH) {
+            Ok(d) => d.as_secs() as i64,
+            Err(e) => {
+                // TODO: what does this code do
+                let dur = e.duration();
+                let (sec, nsec) = (dur.as_secs() as i64, dur.subsec_nanos());
+                if nsec == 0 { -sec } else { -sec - 1 }
+            }
+        };
+
+        sec.into()
     }
 }
 

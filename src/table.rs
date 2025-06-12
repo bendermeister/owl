@@ -36,6 +36,12 @@ impl Table {
     }
 }
 
+impl Default for Row {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Row {
     pub fn new() -> Self {
         Self { cols: Vec::new() }
@@ -58,13 +64,13 @@ impl Display for Table {
         for (i, title) in self.header.cols.iter().enumerate() {
             write!(f, "{}{}", title, " ".repeat(lengths[i] - title.len()))?;
         }
-        write!(f, "\n")?;
+        writeln!(f)?;
 
         for row in self.body.iter() {
             for (i, element) in row.cols.iter().enumerate() {
                 write!(f, "{}{}", element, " ".repeat(lengths[i] - element.len()))?;
             }
-            write!(f, "\n")?;
+            writeln!(f)?;
         }
 
         Ok(())

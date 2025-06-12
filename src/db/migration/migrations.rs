@@ -5,54 +5,46 @@ pub struct Migration0001 {}
 impl Migration for Migration0001 {
     fn up(&self, db: &rusqlite::Connection) -> Result<(), anyhow::Error> {
         db.execute(
-            "CREATE TABLE entry (
+            "CREATE TABLE files (
                 id              INTEGER NOT NULL UNIQUE,
-                title           TEXT    NOT NULL,
-                description     TEXT    NOT NULL,
-                opened          INTEGER NOT NULL,
-                path            TEXT    NOT NULL,
+                path            TEXT NOT NULL UNIQUE,
                 last_touched    INTEGER NOT NULL,
 
-                PRIMARY KEY (id)
+                PRIMARY KEY(id)
+            );",
+            rusqlite::params![],
+        )?;
+
+        db.execute(
+            "CREATE TABLE terms (
+                id INTEGER NOT NULL UNIQUE,
+                term TEXT NOT NULL UNIQUE,
+                PRIMARY KEY(id)
+            );",
+            rusqlite::params![],
+        )?;
+
+        db.execute(
+            "CREATE TABLE term_frequencies (
+                term    INTEGER NOT NULL,
+                file    INTEGER NOT NULL,
+                tf      REAL    NOT NULL,
+
+                FOREIGN KEY(term) REFERENCES terms(id),
+                FOREIGN KEY(file) REFERENCES files(id)
             );",
             rusqlite::params![],
         )?;
 
         db.execute(
             "CREATE TABLE todo (
-                id          INTEGER NOT NULL UNIQUE,
-                body        TEXT    NOT NULL,
-                opened      INTEGER NOT NULL,
-                closed      INTEGER,
-                scheduled   INTEGER,
+                file        INTEGER NOT NULL,
+                title       TEXT NOT NULL,
                 deadline    INTEGER,
+                scheduled   INTEGER,
 
-                FOREIGN KEY(id) REFERENCES entry(id)
+                FOREIGN KEY(file) REFERENCES file(id)
             );",
-            rusqlite::params![],
-        )?;
-
-        db.execute(
-            "
-            CREATE TABLE tag (
-                id      INTEGER NOT NULL UNIQUE,
-                name    TEXT    NOT NULL,
-                PRIMARY KEY(id)
-            );
-            ",
-            rusqlite::params![],
-        )?;
-
-        db.execute(
-            "
-            CREATE TABLE taggings (
-                tag INTEGER NOT NULL,
-                entry INTEGER NOT NULL,
-
-                FOREIGN KEY(tag) REFERENCES tag(id),
-                FOREIGN KEY(entry) REFERENCES entry(id)
-            );
-            ",
             rusqlite::params![],
         )?;
 

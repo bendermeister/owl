@@ -1,6 +1,4 @@
 use crate::types::time_stamp::TimeStamp;
-use std::fs;
-use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Todo {
@@ -19,45 +17,7 @@ impl Todo {
     }
 }
 
-fn read_dir(path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
-    if !path.is_dir() {
-        return Err(anyhow::anyhow!("can't treat file as directory"));
-    }
-
-    let mut buf = Vec::new();
-
-    let dir = fs::read_dir(path)?;
-
-    for entry in dir {
-        let entry = entry?;
-        let path = entry.path();
-
-        let mut other = if path.is_dir() {
-            read_dir(&path)?
-        } else {
-            read_file(&path)?
-        };
-
-        buf.append(&mut other);
-    }
-
-    Ok(buf)
-}
-
-pub fn get_all(path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
-    if path.is_dir() {
-        read_dir(path)
-    } else {
-        read_file(path)
-    }
-}
-
-fn read_file(path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
-    let body = fs::read_to_string(path)?;
-    read_body(&body)
-}
-
-fn read_body(body: &str) -> Result<Vec<Todo>, anyhow::Error> {
+pub fn parse_todos(body: &str) -> Result<Vec<Todo>, anyhow::Error> {
     let mut buf = Vec::new();
 
     for line in body.lines() {
@@ -119,7 +79,7 @@ mod test {
 #### TODO: fourth todo
 there should be some normal text here
 ";
-        let got = read_body(body).unwrap();
+        let got = parse_todos(body).unwrap();
         let expected = vec![
             Todo {
                 title: "first todo".into(),
