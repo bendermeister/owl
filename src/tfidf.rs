@@ -5,7 +5,7 @@ use std::path::PathBuf;
 fn get_tf(db: &rusqlite::Connection, file: i64, term: i64) -> Result<f64, anyhow::Error> {
     let mut stmt =
         db.prepare_cached("SELECT tf FROM term_frequencies WHERE term = ? AND file = ? LIMIT 1;")?;
-    let row: Result<f64, _> = stmt.query_one(rusqlite::params![term, file], |row| Ok(row.get(0)?));
+    let row: Result<f64, _> = stmt.query_one(rusqlite::params![term, file], |row| row.get(0));
 
     let tf = match row {
         Ok(row) => row,
@@ -17,10 +17,7 @@ fn get_tf(db: &rusqlite::Connection, file: i64, term: i64) -> Result<f64, anyhow
 }
 
 pub fn rank(db: &rusqlite::Connection, phrase: &str) -> Result<Vec<PathBuf>, anyhow::Error> {
-    let mut phrase: Vec<_> = phrase
-        .split_whitespace()
-        .map(|word| stemmer::stem(word))
-        .collect();
+    let mut phrase: Vec<_> = phrase.split_whitespace().map(stemmer::stem).collect();
     phrase.sort();
 
     let files: HashMap<i64, PathBuf> = db
@@ -33,7 +30,7 @@ pub fn rank(db: &rusqlite::Connection, phrase: &str) -> Result<Vec<PathBuf>, any
     for term in phrase.iter() {
         let id: i64 = db
             .prepare_cached("SELECT id FROM terms WHERE term = ?")?
-            .query_row([term], |row| Ok(row.get(0)?))?;
+            .query_row([term], |row| row.get(0))?;
         terms.push(id);
     }
 
@@ -45,7 +42,7 @@ pub fn rank(db: &rusqlite::Connection, phrase: &str) -> Result<Vec<PathBuf>, any
             .prepare_cached(
                 "SELECT COUNT(*) FROM (SELECT DISTINCT file FROM term_frequencies WHERE term = ?);",
             )?
-            .query_row([term], |row| Ok(row.get(0)?))?;
+            .query_row([term], |row| row.get(0))?;
         let term_count = term_count as f64;
         idf.insert(*term, file_count / term_count);
     }
@@ -59,7 +56,7 @@ pub fn rank(db: &rusqlite::Connection, phrase: &str) -> Result<Vec<PathBuf>, any
         }
     }
 
-    let mut ranking: Vec<i64> = files.keys().map(|k| *k).collect();
+    let mut ranking: Vec<i64> = files.keys().copied().collect();
     ranking.sort_by(|a, b| {
         tf_idf
             .get(a)
@@ -71,8 +68,7 @@ pub fn rank(db: &rusqlite::Connection, phrase: &str) -> Result<Vec<PathBuf>, any
 
     let ranking: Vec<PathBuf> = ranking
         .iter()
-        .map(|id| files.get(id).unwrap())
-        .map(|p| p.clone())
+        .map(|id| files.get(id).unwrap().clone())
         .collect();
 
     Ok(ranking)
