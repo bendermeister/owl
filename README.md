@@ -1,3 +1,4 @@
+[![cargo-tests.yml](https://github.com/bendermeister/owl/actions/workflows/rust.yml/badge.svg)](https://github.com/bendermeister/owl/actions/workflows/rust.yml)
 # owl
 My favourite things from Org Mode without a dependency on Emacs
 
