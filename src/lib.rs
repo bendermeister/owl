@@ -7,3 +7,4 @@ pub mod table;
 pub mod indexer;
 pub mod stemmer;
 pub mod tfidf;
+pub mod file;
