@@ -11,7 +11,6 @@ pub struct Path {
 #[derive(Debug, Clone)]
 pub struct File {
     path: std::path::PathBuf,
-    body: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -21,7 +20,7 @@ pub struct Directory {
 
 impl File {
     pub fn new(path: PathBuf) -> Self {
-        Self { path, body: None }
+        Self { path }
     }
 }
 
@@ -40,34 +39,26 @@ impl Directory {
 #[allow(refining_impl_trait)]
 impl PathLike for Path {
     fn is_dir(&self) -> bool {
-        // TODO: there needs to be a better way
-        let path: PathBuf = self.path.clone().into();
-        path.is_dir()
+        self.path.is_dir()
     }
 
     fn is_file(&self) -> bool {
-        // TODO: there needs to be a better way
-        let path: PathBuf = self.path.clone().into();
-        path.is_file()
+        self.path.is_file()
     }
 
     fn to_dir(self) -> Result<Directory, File> {
-        let path: PathBuf = self.path.into();
-
-        if path.is_dir() {
-            Ok(Directory::new(path))
+        if self.path.is_dir() {
+            Ok(Directory::new(self.path))
         } else {
-            Err(File::new(path))
+            Err(File::new(self.path))
         }
     }
 
     fn to_file(self) -> Result<File, Directory> {
-        let path: PathBuf = self.path.into();
-
-        if path.is_dir() {
-            Err(Directory::new(path))
+        if self.path.is_dir() {
+            Err(Directory::new(self.path))
         } else {
-            Ok(File::new(path))
+            Ok(File::new(self.path))
         }
     }
 
@@ -96,12 +87,8 @@ impl DirectoryLike for Directory {
 }
 
 impl FileLike for File {
-    fn read(&mut self) -> String {
-        if let Some(body) = &self.body {
-            return body.clone();
-        }
-        self.body = Some(std::fs::read_to_string(&self.path).unwrap());
-        self.read()
+    fn read(&self) -> String {
+        std::fs::read_to_string(&self.path).unwrap()
     }
 
     fn extension(&self) -> Option<&OsStr> {
@@ -118,7 +105,11 @@ impl FileLike for File {
 
     fn file_format(&self) -> crate::file_format::FileFormat {
         self.extension()
-            .map(|v| FileFormat::new(v))
+            .map(FileFormat::new)
             .unwrap_or(FileFormat::Unknown)
+    }
+
+    fn path(&self) -> &std::path::Path {
+        &self.path
     }
 }

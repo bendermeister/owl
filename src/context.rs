@@ -1,4 +1,6 @@
 use crate::db;
+use crate::file::file::Path;
+use crate::file::prelude::*;
 use crate::indexer;
 use std::path::PathBuf;
 
@@ -21,7 +23,11 @@ pub fn get_context(mut owl_dir: PathBuf) -> Result<Context, anyhow::Error> {
     db::migration::migrate(&db)?;
     owl_dir.pop();
 
-    indexer::index(&db, std::fs::read_dir(&owl_dir).unwrap())?;
+    let dir = Path::new(owl_dir);
+    let dir = dir
+        .to_dir()
+        .expect("OWL_DIR environment variable should be a path to a directory not to a file");
+    indexer::index(&db, dir)?;
 
     let context = Context {
         db,

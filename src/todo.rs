@@ -1,5 +1,6 @@
-use crate::time_stamp::TimeStamp;
+use crate::file::prelude::*;
 use crate::file_format::FileFormat;
+use crate::time_stamp::TimeStamp;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Todo {
@@ -18,11 +19,11 @@ impl Todo {
     }
 }
 
-pub fn parse_todos(body: &str, format: FileFormat) -> Result<Vec<Todo>, anyhow::Error> {
-    match format {
+pub fn parse_todos(file: &impl FileLike) -> Result<Vec<Todo>, anyhow::Error> {
+    match file.file_format() {
         FileFormat::Unknown => Ok(Vec::new()),
-        FileFormat::Markdown => parse_todos_markdown(body),
-        FileFormat::Typst => parse_todos_typst(body),
+        FileFormat::Markdown => parse_todos_markdown(&file.read()),
+        FileFormat::Typst => parse_todos_typst(&file.read()),
     }
 }
 

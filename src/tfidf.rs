@@ -1,6 +1,28 @@
+use crate::file::prelude::*;
 use crate::stemmer;
 use std::collections::HashMap;
 use std::path::PathBuf;
+
+fn term_histogram_plain_text(file: &impl FileLike) -> HashMap<String, u64> {
+    let body = file.read();
+    let terms = body.split_whitespace().map(stemmer::stem);
+
+    let mut histogram = HashMap::new();
+
+    for term in terms {
+        *histogram.entry(term).or_insert(0) += 1;
+    }
+
+    histogram
+}
+
+pub fn term_histogram(file: &impl FileLike) -> HashMap<String, u64> {
+    match file.file_format() {
+        crate::file_format::FileFormat::Unknown => HashMap::new(),
+        crate::file_format::FileFormat::Markdown => term_histogram_plain_text(file),
+        crate::file_format::FileFormat::Typst => term_histogram_plain_text(file),
+    }
+}
 
 fn get_tf(db: &rusqlite::Connection, file: i64, term: i64) -> Result<f64, anyhow::Error> {
     let mut stmt =
