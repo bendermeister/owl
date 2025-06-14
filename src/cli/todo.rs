@@ -27,13 +27,24 @@ pub fn run(context: Context, args: Args) -> Result<(), anyhow::Error> {
 fn run_list(context: Context, _: ListArgs) -> Result<(), anyhow::Error> {
     let todos: Result<Vec<Todo>, anyhow::Error> = context
         .db
-        .prepare("SELECT title, deadline, scheduled FROM todos;")?
+        .prepare(
+            "
+            SELECT 
+                todos.title, 
+                todos.deadline, 
+                todos.scheduled,
+                todos.line,
+                files.path
+            FROM todos INNER JOIN files ON todos.file = files.id;",
+        )?
         .query(rusqlite::params![])?
         .and_then(|row| {
             Ok(Todo {
                 title: row.get(0)?,
                 deadline: row.get(1)?,
                 scheduled: row.get(2)?,
+                line_number: row.get(3)?,
+                file: row.get::<_, String>(4)?.into(),
             })
         })
         .collect();
@@ -43,7 +54,8 @@ fn run_list(context: Context, _: ListArgs) -> Result<(), anyhow::Error> {
     let table = table::Row::new()
         .add_col("Title".into())
         .add_col("Scheduled".into())
-        .add_col("Deadline".into());
+        .add_col("Deadline".into())
+        .add_col("File".into());
 
     let mut table = table::Table::new(table);
 
@@ -59,7 +71,12 @@ fn run_list(context: Context, _: ListArgs) -> Result<(), anyhow::Error> {
                 todo.deadline
                     .map(|v| v.to_string())
                     .unwrap_or_else(|| "".into()),
-            );
+            )
+            .add_col(format!(
+                "{}:{}",
+                todo.file.to_string_lossy(),
+                todo.line_number
+            ));
 
         table.push(row);
     }

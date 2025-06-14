@@ -28,7 +28,7 @@ fn db_delete_files(db: &rusqlite::Connection, files: &[i64]) -> Result<(), anyho
 
 fn index_file(db: &rusqlite::Connection, file: impl FileLike) -> Result<(), anyhow::Error> {
     let file_id: i64 = db
-        .prepare_cached("INSERT INTO files (path, last_touched) VALUES(?, ?) RETURNING id;")?
+        .prepare_cached("INSERT INTO files (path, modified) VALUES(?, ?) RETURNING id;")?
         .query_row(
             rusqlite::params![file.path().to_string_lossy(), file.modified()],
             |row| row.get(0),
@@ -42,15 +42,16 @@ fn index_file(db: &rusqlite::Connection, file: impl FileLike) -> Result<(), anyh
         db.prepare_cached(
             "
             INSERT INTO todos 
-                (file, title, deadline, scheduled)
-                VALUES(?, ?, ?, ?);
+                (file, title, deadline, scheduled, line)
+                VALUES(?, ?, ?, ?, ?);
             ",
         )?
         .execute(rusqlite::params![
             file_id,
             todo.title,
             todo.deadline,
-            todo.scheduled
+            todo.scheduled,
+            todo.line_number,
         ])?;
     }
 
@@ -84,9 +85,10 @@ pub fn index(db: &rusqlite::Connection, dir: impl DirectoryLike) -> Result<(), a
     let file_set = files.iter().map(|f| f.path()).collect::<HashSet<_>>();
 
     // get every file from database
+    //
 
     let db_files = db
-        .prepare("SELECT id, path, last_touched FROM files;")?
+        .prepare("SELECT id, path, modified FROM files;")?
         .query([])?
         .and_then(|row| {
             Ok(DBFile {
@@ -199,7 +201,14 @@ mod test {
         index(&db, root).unwrap();
 
         let mut todos = db
-            .prepare("SELECT title, deadline, scheduled FROM todos;")
+            .prepare("
+                SELECT 
+                    todos.title, 
+                    todos.deadline, 
+                    todos.scheduled, 
+                    todos.line,
+                    files.path
+                FROM todos INNER JOIN files ON todos.file = files.id;")
             .unwrap()
             .query([])
             .unwrap()
@@ -208,6 +217,8 @@ mod test {
                     title: row.get(0).unwrap(),
                     deadline: row.get(1).unwrap(),
                     scheduled: row.get(2).unwrap(),
+                    line_number: row.get(3).unwrap(),
+                    file: row.get::<_, String>(4).unwrap().into(),
                 })
             })
             .collect::<Result<Vec<_>, anyhow::Error>>()
@@ -264,7 +275,16 @@ mod test {
         index(&db, root).unwrap();
 
         let mut todos = db
-            .prepare("SELECT title, deadline, scheduled FROM todos;")
+            .prepare(
+                "
+                SELECT 
+                    todos.title, 
+                    todos.deadline, 
+                    todos.scheduled, 
+                    todos.line,
+                    files.path
+                FROM todos INNER JOIN files ON todos.file = files.id;",
+            )
             .unwrap()
             .query([])
             .unwrap()
@@ -273,6 +293,8 @@ mod test {
                     title: row.get(0).unwrap(),
                     deadline: row.get(1).unwrap(),
                     scheduled: row.get(2).unwrap(),
+                    line_number: row.get(3).unwrap(),
+                    file: row.get::<_, String>(4).unwrap().into(),
                 })
             })
             .collect::<Result<Vec<_>, anyhow::Error>>()
