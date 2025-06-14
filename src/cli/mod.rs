@@ -1,12 +1,13 @@
-use crate::context;
+use crate::context::Context;
 use crate::context::OutputFormat;
 use clap::Parser;
+use crate::store::Store;
 
 #[derive(Debug, clap::Parser)]
 #[clap(author, version, about)]
 struct Args {
-    /// base directory from where to start the indexing
-    base_directory: String,
+    #[clap(long)]
+    store: std::path::PathBuf,
 
     /// desired output format
     #[clap(long)]
@@ -31,8 +32,13 @@ enum Command {
 
 pub fn run() -> Result<(), anyhow::Error> {
     let args = Args::parse();
-    let mut context = context::get_context(args.base_directory.into())?;
-    context.output_format = args.format;
+    let store = Store::open(&args.store)?;
+
+    let context = Context {
+        store,
+        output_format: args.format,
+    };
+
     match args.command {
         Command::Todo(args) => todo::run(context, args),
         Command::Search(args) => search::run(context, args),

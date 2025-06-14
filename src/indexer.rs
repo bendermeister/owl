@@ -1,90 +1,18 @@
 use crate::file::prelude::*;
 use crate::file_format::FileFormat;
+use crate::store;
+use crate::store::Store;
 use crate::tfidf;
 use crate::time_stamp::TimeStamp;
 use crate::todo;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
 
-struct DBFile {
-    id: i64,
-    path: PathBuf,
-    modified: TimeStamp,
-}
-
-fn db_delete_files(db: &rusqlite::Connection, files: &[i64]) -> Result<(), anyhow::Error> {
-    for id in files.iter() {
-        db.prepare_cached("DELETE FROM term_frequencies WHERE file = ?")?
-            .execute([id])?;
-
-        db.prepare_cached("DELETE FROM todos WHERE file = ?")?
-            .execute([id])?;
-
-        db.prepare_cached("DELETE FROM files WHERE id = ?")?
-            .execute([id])?;
-    }
-
-    Ok(())
-}
-
-fn index_file(db: &rusqlite::Connection, file: impl FileLike) -> Result<(), anyhow::Error> {
-    let file_id: i64 = db
-        .prepare_cached("INSERT INTO files (path, modified) VALUES(?, ?) RETURNING id;")?
-        .query_row(
-            rusqlite::params![file.path().to_string_lossy(), file.modified()],
-            |row| row.get(0),
-        )?;
-
-    // find all todos in file body and insert them into database
-
-    let todos = todo::parse_todos(&file)?;
-
-    for todo in todos.into_iter() {
-        db.prepare_cached(
-            "
-            INSERT INTO todos 
-                (file, title, deadline, scheduled, line)
-                VALUES(?, ?, ?, ?, ?);
-            ",
-        )?
-        .execute(rusqlite::params![
-            file_id,
-            todo.title,
-            todo.deadline,
-            todo.scheduled,
-            todo.line_number,
-        ])?;
-    }
-
-    // find all terms in file body and insert them into database
-
-    let terms = tfidf::term_histogram(&file);
-
-    for (term, frequency) in terms.into_iter() {
-        let exists: bool = db
-            .prepare_cached("SELECT EXISTS (SELECT 1 FROM terms WHERE term = ? LIMIT 1);")?
-            .query_row([&term], |row| row.get(0))?;
-
-        let term_id: i64 = if exists {
-            db.prepare_cached("SELECT id FROM terms WHERE term = ? LIMIT 1;")?
-                .query_row([&term], |row| row.get(0))?
-        } else {
-            db.prepare_cached("INSERT INTO terms (term) VALUES(?) RETURNING id;")?
-                .query_row([&term], |row| row.get(0))?
-        };
-
-        db.prepare_cached("INSERT INTO term_frequencies (term, file, tf) VALUES(?, ?, ?);")?
-            .execute(rusqlite::params![term_id, file_id, frequency])?;
-    }
-
-    Ok(())
-}
-
-pub fn index(db: &rusqlite::Connection, dir: impl DirectoryLike) -> Result<(), anyhow::Error> {
+pub fn index(store: &mut Store, dir: impl DirectoryLike) -> Result<(), anyhow::Error> {
+    // TODO: dir.discover should return iterator
     let files = dir.discover();
 
     // filter out any files with unknown format
-    let files = files
+    let mut files = files
         .into_iter()
         .filter(|f| match f.file_format() {
             FileFormat::Unknown => false,
@@ -95,64 +23,136 @@ pub fn index(db: &rusqlite::Connection, dir: impl DirectoryLike) -> Result<(), a
 
     let file_set = files.iter().map(|f| f.path()).collect::<HashSet<_>>();
 
-    // get every file from database
-    //
-
-    let db_files = db
-        .prepare("SELECT id, path, modified FROM files;")?
-        .query([])?
-        .and_then(|row| {
-            Ok(DBFile {
-                id: row.get(0)?,
-                path: row.get::<_, String>(1)?.into(),
-                modified: row.get(2)?,
-            })
-        })
-        .collect::<Result<Vec<_>, anyhow::Error>>()?;
-
     // delete every file from database which is no longer present in actual file tree
-
-    let db_garbage = db_files
-        .iter()
-        .filter(|f| !file_set.contains(f.path.as_path()))
-        .map(|f| f.id)
-        .collect::<Vec<_>>();
-
-    db_delete_files(db, &db_garbage)?;
+    store
+        .files
+        .retain(|file| file_set.contains(file.path.as_path()));
 
     // find every file which was updated or created since last index
 
-    let db_file_map: HashMap<&std::path::Path, &DBFile> =
-        db_files.iter().map(|f| (f.path.as_path(), f)).collect();
-
-    let files = files
-        .into_iter()
-        .filter(|f| {
-            f.modified()
-                > db_file_map
-                    .get(f.path())
-                    .map(|v| v.modified)
-                    .unwrap_or(TimeStamp::new(0))
-        })
-        .collect::<Vec<_>>();
-
-    // those files can be deleted from the database as they will be reiniserted afterwards
-
-    let db_garbage = files
+    let store_map = store
+        .files
         .iter()
-        .map(|f| db_file_map.get(f.path()))
-        .filter(|f| f.is_some())
-        .map(|f| f.unwrap().id)
-        .collect::<Vec<_>>();
+        .map(|file| (file.path.as_path(), file))
+        .collect::<HashMap<_, _>>();
 
-    db_delete_files(db, &db_garbage)?;
+    files.retain(|f| {
+        f.modified()
+            > store_map
+                .get(f.path())
+                .map(|v| v.modified)
+                .unwrap_or(TimeStamp::new(0))
+    });
 
+    // those files need to be removed from the store
+    let file_set = files.iter().map(|file| file.path()).collect::<HashSet<_>>();
+    store
+        .files
+        .retain(|file| !file_set.contains(file.path.as_path()));
 
-    // index those files
+    // get a hashset representing the files left in the store
+    let store_set = store
+        .files
+        .iter()
+        .map(|file| file.id.clone())
+        .collect::<HashSet<_>>();
+
+    // idfs of terms which where present in files which are no longer in the store need to be
+    // updated later
+    let mut idf_to_update = store
+        .term_frequencies
+        .iter()
+        .filter(|tf| !store_set.contains(&tf.file))
+        .map(|tf| (tf.term.clone(), 0))
+        .collect::<HashMap<_, _>>();
+
+    store
+        .inverse_document_frequencies
+        .retain(|idf| !idf_to_update.contains_key(&idf.term));
+
+    // remove term frequencies of files which are no longer in the store from the store
+    store
+        .term_frequencies
+        .retain(|tf| store_set.contains(&tf.file));
+
+    // remove todos of files which are no longer in thes store from the store
+    store.todos.retain(|t| store_set.contains(&t.file));
 
     for file in files.into_iter() {
-        index_file(db, file)?;
+        let todos = todo::parse_todos(&file)?;
+        let term_frequencies = tfidf::term_histogram(&file);
+        let file_id = store.file_id();
+
+        store.files.push(store::File {
+            id: file_id,
+            path: file.path().to_path_buf(),
+            modified: file.modified(),
+        });
+
+        let todos = todos.into_iter().map(move |todo| store::Todo {
+            file: file_id,
+            line_number: todo.line_number,
+            title: todo.title,
+            deadline: todo.deadline,
+            scheduled: todo.scheduled,
+        });
+        store.todos.extend(todos);
+
+        let current_terms = store
+            .terms
+            .iter()
+            .map(|t| (t.term.as_str(), t.id.clone()))
+            .collect::<HashMap<_, _>>();
+
+        let mut new_terms = Vec::new();
+        let mut old_terms = Vec::new();
+
+        for (term, frequency) in term_frequencies.into_iter() {
+            if let Some(id) = current_terms.get(term.as_str()) {
+                old_terms.push((*id, frequency));
+            } else {
+                new_terms.push((term, frequency));
+            }
+        }
+
+        let old_terms = old_terms
+            .into_iter()
+            .map(|(id, freq)| store::TermFrequency {
+                term: id,
+                file: file_id,
+                frequency: freq,
+            });
+
+        store.term_frequencies.extend(old_terms);
+
+        for (term, frequency) in new_terms.into_iter() {
+            let term_id = store.term_id();
+            store.terms.push(store::Term { id: term_id, term });
+            store.term_frequencies.push(store::TermFrequency {
+                term: term_id,
+                file: file_id,
+                frequency,
+            });
+        }
     }
+
+    for tf in store.term_frequencies.iter() {
+        if let Some(count) = idf_to_update.get_mut(&tf.term) {
+            *count += 1;
+        }
+    }
+
+    let document_count = store.files.len() as u64;
+
+    let idf_to_update =
+        idf_to_update
+            .into_iter()
+            .map(|(term, idf)| store::InverseDocumentFrequency {
+                term,
+                frequency: document_count - idf,
+            });
+
+    store.inverse_document_frequencies.extend(idf_to_update);
 
     Ok(())
 }
@@ -165,8 +165,15 @@ mod test {
 
     #[test]
     fn test_index() {
-        let db = rusqlite::Connection::open_in_memory().unwrap();
-        crate::db::migration::migrate(&db).unwrap();
+        let mut store = Store {
+            file_id_max: 0,
+            term_id_max: 0,
+            files: Vec::new(),
+            terms: Vec::new(),
+            term_frequencies: Vec::new(),
+            inverse_document_frequencies: Vec::new(),
+            todos: Vec::new(),
+        };
 
         let file1 = TestFile {
             path: "/root/dir1/todo1.md".into(),
@@ -210,33 +217,25 @@ mod test {
             ],
         };
 
-        index(&db, root).unwrap();
+        index(&mut store, root).unwrap();
 
-        let mut todos = db
-            .prepare(
-                "
-                SELECT 
-                    todos.title, 
-                    todos.deadline, 
-                    todos.scheduled, 
-                    todos.line,
-                    files.path
-                FROM todos INNER JOIN files ON todos.file = files.id;",
-            )
-            .unwrap()
-            .query([])
-            .unwrap()
-            .and_then(|row| {
-                Ok(Todo {
-                    title: row.get(0).unwrap(),
-                    deadline: row.get(1).unwrap(),
-                    scheduled: row.get(2).unwrap(),
-                    line_number: row.get(3).unwrap(),
-                    file: row.get::<_, String>(4).unwrap().into(),
-                })
+        let file_map = store
+            .files
+            .iter()
+            .map(|file| (file.id, file.path.as_path()))
+            .collect::<HashMap<_, _>>();
+
+        let mut todos = store
+            .todos
+            .iter()
+            .map(|t| crate::todo::Todo {
+                title: t.title.to_owned(),
+                file: file_map.get(&t.file).unwrap().to_path_buf(),
+                deadline: t.deadline.clone(),
+                scheduled: t.scheduled.clone(),
+                line_number: t.line_number,
             })
-            .collect::<Result<Vec<_>, anyhow::Error>>()
-            .unwrap();
+            .collect::<Vec<_>>();
 
         todos.sort_by(|a, b| a.title.cmp(&b.title));
 
@@ -286,33 +285,26 @@ mod test {
             ],
         };
 
-        index(&db, root).unwrap();
+        index(&mut store, root).unwrap();
 
-        let mut todos = db
-            .prepare(
-                "
-                SELECT 
-                    todos.title, 
-                    todos.deadline, 
-                    todos.scheduled, 
-                    todos.line,
-                    files.path
-                FROM todos INNER JOIN files ON todos.file = files.id;",
-            )
-            .unwrap()
-            .query([])
-            .unwrap()
-            .and_then(|row| {
-                Ok(Todo {
-                    title: row.get(0).unwrap(),
-                    deadline: row.get(1).unwrap(),
-                    scheduled: row.get(2).unwrap(),
-                    line_number: row.get(3).unwrap(),
-                    file: row.get::<_, String>(4).unwrap().into(),
-                })
+
+        let file_map = store
+            .files
+            .iter()
+            .map(|file| (file.id, file.path.as_path()))
+            .collect::<HashMap<_, _>>();
+
+        let mut todos = store
+            .todos
+            .iter()
+            .map(|t| crate::todo::Todo {
+                title: t.title.to_owned(),
+                file: file_map.get(&t.file).unwrap().to_path_buf(),
+                deadline: t.deadline.clone(),
+                scheduled: t.scheduled.clone(),
+                line_number: t.line_number,
             })
-            .collect::<Result<Vec<_>, anyhow::Error>>()
-            .unwrap();
+            .collect::<Vec<_>>();
 
         todos.sort_by(|a, b| a.title.cmp(&b.title));
 
