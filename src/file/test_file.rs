@@ -1,3 +1,4 @@
+use crate::file_format::FileFormat;
 use std::ffi::OsStr;
 use std::path::PathBuf;
 
@@ -77,6 +78,12 @@ impl FileLike for TestFile {
 
     fn extension(&self) -> Option<&OsStr> {
         self.path.extension()
+    }
+
+    fn file_format(&self) -> crate::file_format::FileFormat {
+        self.extension()
+            .map(|v| FileFormat::new(v))
+            .unwrap_or(FileFormat::Unknown)
     }
 }
 

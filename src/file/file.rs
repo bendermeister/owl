@@ -1,4 +1,5 @@
 use super::prelude::*;
+use crate::file_format::FileFormat;
 use std::ffi::OsStr;
 use std::path::PathBuf;
 
@@ -113,5 +114,11 @@ impl FileLike for File {
             .modified()
             .unwrap()
             .into()
+    }
+
+    fn file_format(&self) -> crate::file_format::FileFormat {
+        self.extension()
+            .map(|v| FileFormat::new(v))
+            .unwrap_or(FileFormat::Unknown)
     }
 }
