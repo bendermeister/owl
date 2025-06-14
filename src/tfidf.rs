@@ -1,7 +1,8 @@
 use crate::file::prelude::*;
-use std::collections::HashMap;
+use crate::store::Store;
+use crate::{stemmer, store};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use crate::stemmer;
 
 fn term_histogram_plain_text(file: &impl FileLike) -> HashMap<String, u64> {
     let body = file.read();
@@ -24,76 +25,52 @@ pub fn term_histogram(file: &impl FileLike) -> HashMap<String, u64> {
     }
 }
 
-fn get_tf(db: &rusqlite::Connection, file: i64, term: i64) -> Result<f64, anyhow::Error> {
-    let mut stmt =
-        db.prepare_cached("SELECT tf FROM term_frequencies WHERE term = ? AND file = ? LIMIT 1;")?;
-    let row: Result<f64, _> = stmt.query_one(rusqlite::params![term, file], |row| row.get(0));
-
-    let tf = match row {
-        Ok(row) => row,
-        Err(rusqlite::Error::QueryReturnedNoRows) => 0 as f64,
-        Err(e) => return Err(anyhow::anyhow!("failed to fetch tf from db: {:?}", e)),
-    };
-
-    Ok(tf)
-}
-
-pub fn rank(db: &rusqlite::Connection, phrase: &str) -> Result<Vec<PathBuf>, anyhow::Error> {
-    let mut phrase: Vec<_> = phrase.split_whitespace().map(stemmer::stem).collect();
-    phrase.sort();
-
-    let files: HashMap<i64, PathBuf> = db
-        .prepare("SELECT id, path FROM files;")?
-        .query([])?
-        .and_then(|row| Ok((row.get(0)?, row.get::<_, String>(1)?.into())))
-        .collect::<Result<_, anyhow::Error>>()?;
-
-    dbg!(&phrase);
-
-    let mut terms = Vec::new();
-    for term in phrase.iter() {
-        let id: i64 = db
-            .prepare_cached("SELECT id FROM terms WHERE term = ?")?
-            .query_row([term], |row| row.get(0))?;
-        terms.push(id);
-    }
-
-    let mut idf: HashMap<i64, f64> = HashMap::new();
-    let file_count = files.len() as f64;
-
-    for term in terms.iter() {
-        let term_count: i64 = db
-            .prepare_cached(
-                "SELECT COUNT(*) FROM (SELECT DISTINCT file FROM term_frequencies WHERE term = ?);",
-            )?
-            .query_row([term], |row| row.get(0))?;
-        let term_count = term_count as f64;
-        idf.insert(*term, file_count / term_count);
-    }
-
-    let mut tf_idf: HashMap<i64, f64> = files.keys().map(|id| (*id, 0 as f64)).collect();
-
-    for term in terms.iter() {
-        for file in files.keys() {
-            let tf = get_tf(db, *file, *term)?;
-            *tf_idf.get_mut(file).unwrap() += tf * idf.get(term).unwrap();
-        }
-    }
-
-    let mut ranking: Vec<i64> = files.keys().copied().collect();
-    ranking.sort_by(|a, b| {
-        tf_idf
-            .get(a)
-            .unwrap()
-            .partial_cmp(tf_idf.get(b).unwrap())
-            .unwrap()
-            .reverse()
-    });
-
-    let ranking: Vec<PathBuf> = ranking
+pub fn rank(store: &Store, phrase: &str) -> Vec<PathBuf> {
+    let term_id_map = store
+        .terms
         .iter()
-        .map(|id| files.get(id).unwrap().clone())
+        .map(|t| (t.term.as_str(), t.id))
+        .collect::<HashMap<_, _>>();
+
+    let phrase: HashSet<_> = phrase
+        .split_whitespace()
+        .map(|s| term_id_map.get(stemmer::stem(s).as_str()))
+        .filter(|t| t.is_some())
+        .map(|t| *t.unwrap())
         .collect();
 
-    Ok(ranking)
+    let idf = store
+        .inverse_document_frequencies
+        .iter()
+        .map(|idf| (idf.term, idf.frequency))
+        .collect::<HashMap<_, _>>();
+
+    let frequencies = store
+        .term_frequencies
+        .iter()
+        .filter(|tf| phrase.contains(&tf.term))
+        .map(|tf| (tf.file, tf.frequency * idf.get(&tf.term).unwrap()))
+        .collect::<Vec<_>>();
+
+    let mut ranking = HashMap::new();
+
+    for (file, rank) in frequencies.into_iter() {
+        *ranking.entry(file).or_insert(0) += rank;
+    }
+
+    let file_map = store
+        .files
+        .iter()
+        .map(|file| (file.id, file.path.as_path()))
+        .collect::<HashMap<_, _>>();
+
+    let mut ranking = ranking
+        .into_iter()
+        .map(|(file, rank)| (file_map.get(&file).unwrap().to_path_buf(), rank))
+        .collect::<Vec<_>>();
+
+    ranking.sort_by(|a, b| a.1.cmp(&b.1));
+
+    ranking.into_iter().map(|(a, _)| a).collect()
+
 }

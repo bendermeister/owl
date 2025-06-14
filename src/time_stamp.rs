@@ -6,7 +6,7 @@ use std::str::FromStr;
 use std::time::SystemTime;
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize, Hash
 )]
 pub struct TimeStamp {
     stamp: i64,

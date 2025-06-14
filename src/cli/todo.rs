@@ -2,6 +2,7 @@ use crate::context::Context;
 use crate::table;
 use crate::todo::Todo;
 use serde_json;
+use std::collections::HashMap;
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
@@ -68,31 +69,20 @@ fn list_todos_json(todos: Vec<Todo>) -> Result<(), anyhow::Error> {
 }
 
 fn run_list(context: Context, _: ListArgs) -> Result<(), anyhow::Error> {
-    let todos: Result<Vec<Todo>, anyhow::Error> = context
-        .db
-        .prepare(
-            "
-            SELECT 
-                todos.title, 
-                todos.deadline, 
-                todos.scheduled,
-                todos.line,
-                files.path
-            FROM todos INNER JOIN files ON todos.file = files.id;",
-        )?
-        .query(rusqlite::params![])?
-        .and_then(|row| {
-            Ok(Todo {
-                title: row.get(0)?,
-                deadline: row.get(1)?,
-                scheduled: row.get(2)?,
-                line_number: row.get(3)?,
-                file: row.get::<_, String>(4)?.into(),
-            })
-        })
-        .collect();
+    let file_map = context
+        .store
+        .files
+        .iter()
+        .map(|f| (f.id.clone(), f.path.as_path()))
+        .collect::<HashMap<_, _>>();
 
-    let todos = todos?;
+    let todos = context.store.todos.iter().map(|t| Todo {
+        title: t.title.to_owned(),
+        file: file_map.get(&t.file).unwrap().to_path_buf(),
+        deadline: t.deadline.clone(),
+        scheduled: t.scheduled.clone(),
+        line_number: t.line_number,
+    }).collect::<Vec<_>>();
 
     match context.output_format {
         crate::context::OutputFormat::Colorful => list_todos_plain(todos),

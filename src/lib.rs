@@ -1,6 +1,5 @@
 pub mod cli;
 pub mod context;
-pub mod db;
 pub mod file;
 pub mod file_format;
 pub mod indexer;
@@ -9,3 +8,4 @@ pub mod tfidf;
 pub mod time_stamp;
 pub mod todo;
 pub mod stemmer;
+pub mod store;
