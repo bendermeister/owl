@@ -68,12 +68,8 @@ impl PathLike for TestPath {
 }
 
 impl FileLike for TestFile {
-    fn read(&mut self) -> String {
+    fn read(&self) -> String {
         self.body.clone()
-    }
-
-    fn modified(&self) -> TimeStamp {
-        self.modified
     }
 
     fn extension(&self) -> Option<&OsStr> {
@@ -82,8 +78,16 @@ impl FileLike for TestFile {
 
     fn file_format(&self) -> crate::file_format::FileFormat {
         self.extension()
-            .map(|v| FileFormat::new(v))
+            .map(FileFormat::new)
             .unwrap_or(FileFormat::Unknown)
+    }
+
+    fn modified(&self) -> TimeStamp {
+        self.modified
+    }
+
+    fn path(&self) -> &std::path::Path {
+        &self.path
     }
 }
 
@@ -244,7 +248,7 @@ mod test {
 
     #[test]
     fn test_read() {
-        let mut file = TestFile {
+        let file = TestFile {
             path: "this/is/some/path/file.md".into(),
             body: "this is a body".into(),
             modified: TimeStamp::now(),
