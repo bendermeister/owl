@@ -33,10 +33,6 @@ fn discover_files(dir: fs::ReadDir) -> Result<Vec<File>, anyhow::Error> {
     let paths = discover_paths(dir)?;
     paths
         .into_iter()
-        .filter(|path| match path.extension() {
-            Some(ext) => ext == "md",
-            None => false,
-        })
         .map(|path| {
             Ok(File {
                 id: 0,
@@ -155,6 +151,13 @@ fn get_or_insert_term(db: &rusqlite::Connection, term: &str) -> Result<i64, anyh
 }
 
 fn index_file(db: &rusqlite::Connection, path: &Path) -> Result<(), anyhow::Error> {
+
+    match path.extension().map(FileFormat::new).unwrap_or(FileFormat::Unknown) {
+        FileFormat::Unknown => return Ok(()),
+        FileFormat::Markdown => (),
+        FileFormat::Typst => (),
+    };
+
     let file_str = match path.to_owned().into_os_string().into_string() {
         Ok(p) => p,
         Err(e) => return Err(anyhow::anyhow!("could not convert path to string: {:?}", e)),
