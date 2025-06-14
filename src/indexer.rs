@@ -1,4 +1,5 @@
 use crate::file::prelude::*;
+use crate::file_format::FileFormat;
 use crate::tfidf;
 use crate::time_stamp::TimeStamp;
 use crate::todo;
@@ -82,6 +83,16 @@ fn index_file(db: &rusqlite::Connection, file: impl FileLike) -> Result<(), anyh
 pub fn index(db: &rusqlite::Connection, dir: impl DirectoryLike) -> Result<(), anyhow::Error> {
     let files = dir.discover();
 
+    // filter out any files with unknown format
+    let files = files
+        .into_iter()
+        .filter(|f| match f.file_format() {
+            FileFormat::Unknown => false,
+            FileFormat::Markdown => true,
+            FileFormat::Typst => true,
+        })
+        .collect::<Vec<_>>();
+
     let file_set = files.iter().map(|f| f.path()).collect::<HashSet<_>>();
 
     // get every file from database
@@ -135,6 +146,7 @@ pub fn index(db: &rusqlite::Connection, dir: impl DirectoryLike) -> Result<(), a
         .collect::<Vec<_>>();
 
     db_delete_files(db, &db_garbage)?;
+
 
     // index those files
 
@@ -201,14 +213,16 @@ mod test {
         index(&db, root).unwrap();
 
         let mut todos = db
-            .prepare("
+            .prepare(
+                "
                 SELECT 
                     todos.title, 
                     todos.deadline, 
                     todos.scheduled, 
                     todos.line,
                     files.path
-                FROM todos INNER JOIN files ON todos.file = files.id;")
+                FROM todos INNER JOIN files ON todos.file = files.id;",
+            )
             .unwrap()
             .query([])
             .unwrap()
