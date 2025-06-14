@@ -1,6 +1,7 @@
 use crate::time_stamp::TimeStamp;
 use std::ffi::OsStr;
 use std::path::PathBuf;
+use crate::file_format::FileFormat;
 
 pub trait PathLike {
     fn path(&self) -> PathBuf;
@@ -13,6 +14,7 @@ pub trait PathLike {
 pub trait FileLike {
     fn read(&mut self) -> String;
     fn extension(&self) -> Option<&OsStr>;
+    fn file_format(&self) -> FileFormat;
     fn modified(&self) -> TimeStamp;
 }
 

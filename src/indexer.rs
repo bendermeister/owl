@@ -1,3 +1,4 @@
+use crate::file_format::FileFormat;
 use crate::stemmer;
 use crate::time_stamp::TimeStamp;
 use crate::todo;
@@ -167,7 +168,12 @@ fn index_file(db: &rusqlite::Connection, path: &Path) -> Result<(), anyhow::Erro
 
     let body = fs::read_to_string(path)?;
 
-    let todos = todo::parse_todos(&body)?;
+    let todos = todo::parse_todos(
+        &body,
+        path.extension()
+            .map(|v| FileFormat::new(v))
+            .unwrap_or(FileFormat::Unknown),
+    )?;
 
     for todo in todos.iter() {
         db.prepare_cached(
