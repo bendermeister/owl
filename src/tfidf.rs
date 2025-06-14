@@ -1,12 +1,11 @@
 use crate::file::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use stemmer::Stemmer;
+use crate::stemmer;
 
 fn term_histogram_plain_text(file: &impl FileLike) -> HashMap<String, u64> {
     let body = file.read();
-    let mut stemmer = Stemmer::new("english").unwrap();
-    let terms = body.split_whitespace().map(|s| stemmer.stem(s));
+    let terms = body.split_whitespace().map(stemmer::stem);
 
     let mut histogram = HashMap::new();
 
@@ -40,8 +39,7 @@ fn get_tf(db: &rusqlite::Connection, file: i64, term: i64) -> Result<f64, anyhow
 }
 
 pub fn rank(db: &rusqlite::Connection, phrase: &str) -> Result<Vec<PathBuf>, anyhow::Error> {
-    let mut stemmer = Stemmer::new("english").unwrap();
-    let mut phrase: Vec<_> = phrase.split_whitespace().map(|s| stemmer.stem(s)).collect();
+    let mut phrase: Vec<_> = phrase.split_whitespace().map(stemmer::stem).collect();
     phrase.sort();
 
     let files: HashMap<i64, PathBuf> = db
@@ -49,6 +47,8 @@ pub fn rank(db: &rusqlite::Connection, phrase: &str) -> Result<Vec<PathBuf>, any
         .query([])?
         .and_then(|row| Ok((row.get(0)?, row.get::<_, String>(1)?.into())))
         .collect::<Result<_, anyhow::Error>>()?;
+
+    dbg!(&phrase);
 
     let mut terms = Vec::new();
     for term in phrase.iter() {

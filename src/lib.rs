@@ -8,3 +8,4 @@ pub mod table;
 pub mod tfidf;
 pub mod time_stamp;
 pub mod todo;
+pub mod stemmer;
