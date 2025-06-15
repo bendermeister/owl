@@ -54,11 +54,39 @@ pub struct Todo {
     pub scheduled: Option<TimeStamp>,
 }
 
+impl Default for Store {
+    fn default() -> Self {
+        Self {
+            file_id_max: 0,
+            term_id_max: 0,
+            files: Vec::new(),
+            terms: Vec::new(),
+            term_frequencies: Vec::new(),
+            inverse_document_frequencies: Vec::new(),
+            todos: Vec::new(),
+        }
+    }
+}
+
 impl Store {
     pub fn open(path: &Path) -> Result<Store, anyhow::Error> {
-        let store = std::fs::read_to_string(path)?;
-        let store: Store = serde_json::from_str(&store)?;
-        Ok(store)
+        let store = match std::fs::read_to_string(path) {
+            Ok(body) => Some(body),
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::NotFound => None,
+                std::io::ErrorKind::PermissionDenied => panic!(
+                    "You don't have persmissions to read your own store! What happened? Owl store at: {:?}",
+                    path
+                ),
+                _ => panic!("could not open owl store at: {:?}", path),
+            },
+        };
+
+        if let Some(store) = store {
+            Ok(serde_json::from_str(&store)?)
+        } else {
+            Ok(Store::default())
+        }
     }
 
     pub fn close(&self, path: &Path) -> Result<(), anyhow::Error> {

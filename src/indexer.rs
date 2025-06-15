@@ -161,7 +161,6 @@ pub fn index(store: &mut Store, dir: impl DirectoryLike) -> Result<(), anyhow::E
 mod test {
     use super::*;
     use crate::file::test_file::{TestBody, TestDirectory, TestFile, TestPath};
-    use crate::todo::Todo;
 
     #[test]
     fn test_index() {
