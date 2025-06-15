@@ -1,5 +1,7 @@
 use owl::cli;
+use owl::config::Config;
 
 fn main() {
-    cli::run().unwrap();
+    let config = Config::open();
+    cli::run(config).unwrap();
 }
