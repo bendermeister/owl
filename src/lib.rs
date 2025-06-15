@@ -1,6 +1,5 @@
 pub mod cli;
 pub mod context;
-pub mod file;
 pub mod file_format;
 pub mod indexer;
 pub mod table;

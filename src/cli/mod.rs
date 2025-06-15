@@ -1,7 +1,5 @@
-use crate::config::Config;
 use crate::context::Context;
 use crate::context::OutputFormat;
-use crate::store::Store;
 use clap::Parser;
 
 #[derive(Debug, clap::Parser)]
@@ -28,15 +26,9 @@ enum Command {
     Search(search::Args),
 }
 
-pub fn run(config: Config) -> Result<(), anyhow::Error> {
+pub fn run(mut context: Context) -> Result<(), anyhow::Error> {
     let args = Args::parse();
-    let store = Store::open(&config.store_path)?;
-
-    let context = Context {
-        store,
-        output_format: args.format,
-    };
-
+    context.output_format = args.format;
     match args.command {
         Command::Todo(args) => todo::run(context, args),
         Command::Search(args) => search::run(context, args),

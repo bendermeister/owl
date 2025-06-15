@@ -1,11 +1,10 @@
-use crate::file::prelude::*;
 use crate::store::Store;
 use crate::stemmer;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use crate::file_format::FileFormat;
 
-fn term_histogram_plain_text(file: &impl FileLike) -> HashMap<String, u64> {
-    let body = file.read();
+fn term_histogram_plain_text(body: &str) -> HashMap<String, u64> {
     let terms = body.split_whitespace().map(stemmer::stem);
 
     let mut histogram = HashMap::new();
@@ -17,11 +16,11 @@ fn term_histogram_plain_text(file: &impl FileLike) -> HashMap<String, u64> {
     histogram
 }
 
-pub fn term_histogram(file: &impl FileLike) -> HashMap<String, u64> {
-    match file.file_format() {
+pub fn term_histogram(body: &str, path: &Path) -> HashMap<String, u64> {
+    match FileFormat::new(path) {
         crate::file_format::FileFormat::Unknown => HashMap::new(),
-        crate::file_format::FileFormat::Markdown => term_histogram_plain_text(file),
-        crate::file_format::FileFormat::Typst => term_histogram_plain_text(file),
+        crate::file_format::FileFormat::Markdown => term_histogram_plain_text(body),
+        crate::file_format::FileFormat::Typst => term_histogram_plain_text(body),
     }
 }
 

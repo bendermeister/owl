@@ -1,7 +1,6 @@
-use crate::file::prelude::*;
 use crate::file_format::FileFormat;
 use crate::time_stamp::TimeStamp;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Todo {
@@ -24,42 +23,41 @@ impl Todo {
     }
 }
 
-pub fn parse_todos(file: &impl FileLike) -> Result<Vec<Todo>, anyhow::Error> {
-    match file.file_format() {
+pub fn parse_todos(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
+    match FileFormat::new(path) {
         FileFormat::Unknown => Ok(Vec::new()),
-        FileFormat::Markdown => parse_todos_markdown(file),
-        FileFormat::Typst => parse_todos_typst(file),
+        FileFormat::Markdown => parse_todos_markdown(body, path),
+        FileFormat::Typst => parse_todos_typst(body, path),
     }
 }
 
-fn parse_todos_typst(file: &impl FileLike) -> Result<Vec<Todo>, anyhow::Error> {
-    let body = file.read();
+fn parse_todos_typst(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
     let mut buf = Vec::new();
 
     for (line_number, line) in body.lines().enumerate() {
         let line_number = line_number + 1;
         if let Some(title) = line.strip_prefix("= TODO:") {
-            buf.push(Todo::new(title, file.path().to_owned(), line_number));
+            buf.push(Todo::new(title, path.to_owned(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("== TODO:") {
-            buf.push(Todo::new(title, file.path().to_owned(), line_number));
+            buf.push(Todo::new(title, path.to_owned(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("=== TODO:") {
-            buf.push(Todo::new(title, file.path().to_owned(), line_number));
+            buf.push(Todo::new(title, path.to_owned(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("==== TODO:") {
-            buf.push(Todo::new(title, file.path().to_owned(), line_number));
+            buf.push(Todo::new(title, path.to_owned(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("===== TODO:") {
-            buf.push(Todo::new(title, file.path().to_owned(), line_number));
+            buf.push(Todo::new(title, path.to_owned(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("====== TODO:") {
-            buf.push(Todo::new(title, file.path().to_owned(), line_number));
+            buf.push(Todo::new(title, path.to_owned(), line_number));
         }
 
         if let Some(stamp) = line.strip_prefix("- DEADLINE:") {
@@ -80,34 +78,33 @@ fn parse_todos_typst(file: &impl FileLike) -> Result<Vec<Todo>, anyhow::Error> {
     Ok(buf)
 }
 
-fn parse_todos_markdown(file: &impl FileLike) -> Result<Vec<Todo>, anyhow::Error> {
-    let body = file.read();
+fn parse_todos_markdown(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
     let mut buf = Vec::new();
 
     for (line_number, line) in body.lines().enumerate() {
         let line_number = line_number + 1;
         if let Some(title) = line.strip_prefix("# TODO:") {
-            buf.push(Todo::new(title, file.path().to_owned(), line_number));
+            buf.push(Todo::new(title, path.to_owned(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("## TODO:") {
-            buf.push(Todo::new(title, file.path().to_owned(), line_number));
+            buf.push(Todo::new(title, path.to_owned(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("### TODO:") {
-            buf.push(Todo::new(title, file.path().to_owned(), line_number));
+            buf.push(Todo::new(title, path.to_owned(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("#### TODO:") {
-            buf.push(Todo::new(title, file.path().to_owned(), line_number));
+            buf.push(Todo::new(title, path.to_owned(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("##### TODO:") {
-            buf.push(Todo::new(title, file.path().to_owned(), line_number));
+            buf.push(Todo::new(title, path.to_owned(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("##### TODO:") {
-            buf.push(Todo::new(title, file.path().to_owned(), line_number));
+            buf.push(Todo::new(title, path.to_owned(), line_number));
         }
 
         if let Some(stamp) = line.strip_prefix("> DEADLINE:") {
@@ -132,8 +129,6 @@ fn parse_todos_markdown(file: &impl FileLike) -> Result<Vec<Todo>, anyhow::Error
 mod test {
     use super::*;
 
-    use crate::file::test_file::TestFile;
-
     #[test]
     fn test_read_body_markdown() {
         let body = "
@@ -148,13 +143,8 @@ there should be some normal text here
 ";
 
         let path: PathBuf = "/some/path/file.typ".into();
-        let file = TestFile {
-            path: path.clone(),
-            body: body.into(),
-            modified: TimeStamp::now(),
-        };
 
-        let got = parse_todos_markdown(&file).unwrap();
+        let got = parse_todos_markdown(&body, &path).unwrap();
         let expected = vec![
             Todo {
                 title: "first todo".into(),
@@ -205,13 +195,7 @@ there should be some normal text here
 ";
 
         let path: PathBuf = "/some/path/file.typ".into();
-        let file = TestFile {
-            path: path.clone(),
-            body: body.into(),
-            modified: TimeStamp::now(),
-        };
-
-        let got = parse_todos_typst(&file).unwrap();
+        let got = parse_todos_typst(&body, &path).unwrap();
         let expected = vec![
             Todo {
                 title: "first todo".into(),
