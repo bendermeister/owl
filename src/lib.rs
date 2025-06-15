@@ -9,3 +9,4 @@ pub mod time_stamp;
 pub mod todo;
 pub mod stemmer;
 pub mod store;
+pub mod config;

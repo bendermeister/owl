@@ -1,6 +1,6 @@
 use crate::file::prelude::*;
 use crate::store::Store;
-use crate::{stemmer, store};
+use crate::stemmer;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 

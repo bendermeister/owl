@@ -1,14 +1,12 @@
+use crate::config::Config;
 use crate::context::Context;
 use crate::context::OutputFormat;
-use clap::Parser;
 use crate::store::Store;
+use clap::Parser;
 
 #[derive(Debug, clap::Parser)]
 #[clap(author, version, about)]
 struct Args {
-    #[clap(long)]
-    store: std::path::PathBuf,
-
     /// desired output format
     #[clap(long)]
     #[clap(value_enum, default_value_t = OutputFormat::Colorful)]
@@ -30,9 +28,9 @@ enum Command {
     Search(search::Args),
 }
 
-pub fn run() -> Result<(), anyhow::Error> {
+pub fn run(config: Config) -> Result<(), anyhow::Error> {
     let args = Args::parse();
-    let store = Store::open(&args.store)?;
+    let store = Store::open(&config.store_path)?;
 
     let context = Context {
         store,
