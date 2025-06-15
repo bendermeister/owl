@@ -1,5 +1,4 @@
-use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Config {
@@ -23,30 +22,41 @@ impl Default for Config {
     }
 }
 
+fn create_default_config(path: &Path) -> Config {
+    let config = Config::default();
+    log::info!("creating default config with values: {:?}", &config);
+
+    let config_body = match toml::to_string_pretty(&config) {
+        Ok(body) => body,
+        Err(e) => panic!("could not serialize default config: error: {:?}", e),
+    };
+
+    let config_prefix = path.parent().unwrap();
+
+    log::info!("mkdir --parents {:?}", config_prefix);
+    std::fs::create_dir_all(config_prefix).unwrap();
+
+    match std::fs::write(path, &config_body) {
+        Ok(_) => log::info!("wrote config to {:?}", path),
+        Err(e) => panic!("could not write config to: '{:?}': error: {:?}", path, e),
+    };
+    config
+}
+
 impl Config {
     pub fn open() -> Self {
         let path = get_config_path();
-        let config = match std::fs::read_to_string(&path) {
-            Ok(body) => Some(body),
-            Err(err) => match err.kind() {
-                io::ErrorKind::PermissionDenied => panic!(
-                    "You don't have necessary permissions to read your own config! What went wrong? config at: {:?}",
-                    path
-                ),
-                io::ErrorKind::NotFound => None,
-                _ => panic!("Could not read config file at: {:?}", path),
-            },
-        };
 
-        if let Some(config) = config {
-            toml::from_str(&config).unwrap()
+        if let Ok(body) = std::fs::read_to_string(&path) {
+            log::info!("read config file at: {:?}", path);
+            let config: Config = match toml::from_str(&body) {
+                Ok(config) => config,
+                Err(e) => panic!("could not parse config at: {:?}: error: {:?}", path, e),
+            };
+            log::info!("parsed config file at: {:?}", path);
+            return config;
         } else {
-            let config = Config::default();
-            let config_body = toml::to_string_pretty(&config).unwrap();
-            let config_prefix = path.parent().unwrap();
-            std::fs::create_dir_all(config_prefix).unwrap();
-            std::fs::write(path, &config_body).unwrap();
-            config
+            return create_default_config(&path);
         }
     }
 }
