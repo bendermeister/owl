@@ -12,55 +12,87 @@ struct DirFile {
     modified: TimeStamp,
 }
 
-pub fn index(store: &mut Store, path: &Path) -> Result<(), anyhow::Error> {
+pub fn index(store: &mut Store, path: &Path) {
     // find all suitable files in path
-
     if !path.is_dir() {
-        return Err(anyhow::anyhow!(
-            "provided path to index is not a directory but a file"
-        ));
+        panic!(
+            "cannot index: provided path is not a direcotry: '{:?}'",
+            path
+        );
     }
 
     let mut files = Vec::new();
     let mut dirs = Vec::new();
     dirs.push(path.to_path_buf());
 
-    while let Some(dir) = dirs.pop() {
-        let dir = match std::fs::read_dir(dir) {
+    while let Some(dir_path) = dirs.pop() {
+        let dir = match std::fs::read_dir(&dir_path) {
             Ok(dir) => dir,
-            Err(_) => continue,
+            Err(err) => {
+                log::warn!(
+                    "ignoring read_dir error for: {:?}: error: {:?}",
+                    dir_path,
+                    err
+                );
+                continue;
+            }
         };
         for entry in dir {
             let entry = match entry {
                 Ok(entry) => entry,
-                Err(_) => continue,
+                Err(err) => {
+                    log::warn!(
+                        "ignoring read_dir entry error for: {:?}: error: {:?}",
+                        dir_path,
+                        err
+                    );
+                    continue;
+                }
             };
 
+            // TODO: this cannot be the right way
             if entry.file_name().as_os_str().as_encoded_bytes()[0] == b'.' {
                 continue;
             }
 
-            let path = entry.path();
+            let file_path = entry.path();
 
-
-            if path.is_dir() {
-                dirs.push(path);
+            if file_path.is_dir() {
+                log::info!("discovered directory: {:?}", file_path);
+                dirs.push(file_path);
                 continue;
             }
 
-            if FileFormat::new(&path).is_known() {
-                let meta = match std::fs::metadata(&path) {
+            if FileFormat::new(&file_path).is_known() {
+                log::info!("discovered file: {:?}", file_path);
+                let meta = match std::fs::metadata(&file_path) {
                     Ok(meta) => meta,
-                    Err(_) => continue,
+                    Err(err) => {
+                        log::warn!(
+                            "ignoring error while reading metadata for: '{:?}': error: {:?}",
+                            file_path,
+                            err
+                        );
+                        continue;
+                    }
                 };
 
                 let modified = match meta.modified() {
                     Ok(modified) => modified,
-                    Err(_) => continue,
+                    Err(err) => {
+                        log::warn!(
+                            "ignoring error while reading mtime for '{:?}' error: {:?}",
+                            file_path,
+                            err
+                        );
+                        continue;
+                    }
                 };
 
+                log::info!("read mtime for file: {:?}", file_path);
+
                 files.push(DirFile {
-                    path,
+                    path: file_path,
                     modified: modified.into(),
                 });
             }
@@ -135,7 +167,14 @@ pub fn index(store: &mut Store, path: &Path) -> Result<(), anyhow::Error> {
         .map(|file| {
             let body = match std::fs::read_to_string(&file.path) {
                 Ok(body) => Some(body),
-                Err(_) => None,
+                Err(err) => {
+                    log::warn!(
+                        "error while trying to read file -> ignoring file: file: {:?}, error: {:?}",
+                        file.path,
+                        err
+                    );
+                    None
+                }
             };
             (file.path, file.modified, body)
         })
@@ -143,8 +182,15 @@ pub fn index(store: &mut Store, path: &Path) -> Result<(), anyhow::Error> {
         .map(|(p, m, b)| (p, m, b.unwrap()));
 
     for (path, modified, body) in files {
-        let todos = todo::parse_todos(&body, &path)?;
+        let todos = match todo::parse_todos(&body, &path) {
+            Ok(todos) => todos,
+            Err(err) => panic!("could not parse todos of: {:?}: error: {:?}", path, err),
+        };
+        log::info!("parsed todos of: {:?}", path);
+
         let term_frequencies = tfidf::term_histogram(&body, &path);
+        log::info!("parsed term frequencies of: {:?}", path);
+
         let file_id = store.file_id();
 
         store.files.push(store::File {
@@ -217,8 +263,6 @@ pub fn index(store: &mut Store, path: &Path) -> Result<(), anyhow::Error> {
             });
 
     store.inverse_document_frequencies.extend(idf_to_update);
-
-    Ok(())
 }
 
 #[cfg(test)]

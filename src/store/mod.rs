@@ -68,24 +68,46 @@ impl Default for Store {
     }
 }
 
-impl Store {
-    pub fn open(path: &Path) -> Result<Store, anyhow::Error> {
-        let store = match std::fs::read_to_string(path) {
-            Ok(body) => Some(body),
-            Err(e) => match e.kind() {
-                std::io::ErrorKind::NotFound => None,
-                std::io::ErrorKind::PermissionDenied => panic!(
-                    "You don't have persmissions to read your own store! What happened? Owl store at: {:?}",
-                    path
-                ),
-                _ => panic!("could not open owl store at: {:?}", path),
-            },
+fn create_default_store(path: &Path) -> Store {
+    let store = Store::default();
+
+    if let Some(parent) = path.parent() {
+        log::info!("mkdir --parents {:?}", parent);
+        match std::fs::create_dir_all(parent) {
+            Ok(_) => (),
+            Err(err) => panic!(
+                "could not create parent directories of default store at: {:?}: error: {:?}",
+                path, err
+            ),
         };
 
-        if let Some(store) = store {
-            Ok(serde_json::from_str(&store)?)
-        } else {
-            Ok(Store::default())
+        let store_body = match serde_json::to_string(&store) {
+            Ok(body) => body,
+            Err(err) => panic!("could not serialize store to json: error: {:?}", err),
+        };
+        log::info!("serialized store to json");
+
+        match std::fs::write(path, store_body) {
+            Ok(_) => (),
+            Err(err) => panic!("could not write store to {:?}: error: {:?}", path, err),
+        };
+        log::info!("wrote serialized store to {:?}", path);
+    }
+
+    store
+}
+
+impl Store {
+    pub fn open(path: &Path) -> Store {
+        match std::fs::read_to_string(path) {
+            Ok(store) => match serde_json::from_str(&store) {
+                Ok(store) => store,
+                Err(e) => panic!("failed to parse store at: {:?}: error: {:?}", path, e),
+            },
+            Err(err) => match err.kind() {
+                std::io::ErrorKind::NotFound => return create_default_store(path),
+                _ => panic!("could not read store at '{:?}': error: {:?}", path, err),
+            },
         }
     }
 
