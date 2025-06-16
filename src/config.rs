@@ -13,23 +13,6 @@ pub struct ConfigRaw {
     pub base_directory: Option<String>,
 }
 
-impl Default for ConfigRaw {
-    fn default() -> Self {
-        ConfigRaw {
-            store_path: Some("$HOME/.config/owl/store.json".into()),
-            ignore_hidden_files: Some(true),
-            ignore: Some(vec![
-                "*/.cargo/*".into(),
-                "*/node_modules/*".into(),
-                "*/go/pkg/*".into(),
-                "$HOME/.config/*".into(),
-                "$HOME/.local/*".into(),
-            ]),
-            base_directory: Some("$HOME".into()),
-        }
-    }
-}
-
 pub fn get_config_path() -> PathBuf {
     let mut path: PathBuf = std::env::var("HOME").unwrap().into();
     path.push(".config");
@@ -38,20 +21,11 @@ pub fn get_config_path() -> PathBuf {
     path
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        let mut store_path = get_config_path();
-        store_path.pop();
-        store_path.push("store.json");
-        Self { store_path }
-    }
-}
-
 fn create_default_config(path: &Path) -> Config {
     let body = r#"# DEFAULT OWL CONFIG FILE
 # have fun
 
-# `store_path` is the location where the internal data of owl will be stored.
+# store_path is the location where the internal data of owl will be stored.
 store_path = "$HOME/.config/owl/store.json"
 
 # Tells owl whether or not to ingore hidden files.
@@ -78,40 +52,85 @@ ignore = [
 base_directory = "$HOME"
         
 "#;
-    let config = Config::default();
-    log::info!("creating default config with values: {:?}", &config);
-
-    let config_body = match toml::to_string_pretty(&config) {
-        Ok(body) => body,
-        Err(e) => panic!("could not serialize default config: error: {:?}", e),
-    };
+    log::info!("creating default config");
 
     let config_prefix = path.parent().unwrap();
-
     log::info!("mkdir --parents {:?}", config_prefix);
     std::fs::create_dir_all(config_prefix).unwrap();
 
-    match std::fs::write(path, &config_body) {
+    match std::fs::write(path, &body) {
         Ok(_) => log::info!("wrote config to {:?}", path),
         Err(e) => panic!("could not write config to: '{:?}': error: {:?}", path, e),
     };
-    config
+
+    Config::open()
+}
+
+fn un_envvar_path(input: &str) -> Result<PathBuf, anyhow::Error> {
+    let parents = input.trim().split("/");
+
+    let mut path = PathBuf::new();
+
+    for parent in parents {
+        if let Some('$') = parent.chars().next() {
+            let parent = match std::env::var(&parent[1..]) {
+                Ok(var) => var,
+                Err(err) => {
+                    return Err(anyhow::anyhow!(
+                        "could not read environment variable: {:?}: error: {:?}",
+                        parent,
+                        err
+                    ));
+                }
+            };
+            path.push(parent);
+        } else {
+            path.push(parent);
+        }
+    }
+
+    Ok(path)
+}
+
+fn parse_config(body: &str) -> Result<Config, anyhow::Error> {
+    let config_raw: ConfigRaw = toml::from_str(body)?;
+
+    let store_path = match &config_raw.store_path {
+        Some(path) => path.as_str(),
+        None => {
+            log::warn!("no store_path present in config file, using default");
+            "$HOME/.config/owl/store.json"
+        }
+    };
+
+    let store_path = match un_envvar_path(store_path) {
+        Ok(path) => path,
+        Err(err) => return Err(anyhow::anyhow!("could not build path to store, error: {:?}", err)),
+    };
+
+    Ok(Config {
+        store_path,
+    })
 }
 
 impl Config {
     pub fn open() -> Self {
         let path = get_config_path();
 
-        if let Ok(body) = std::fs::read_to_string(&path) {
-            log::info!("read config file at: {:?}", path);
-            let config: Config = match toml::from_str(&body) {
-                Ok(config) => config,
-                Err(e) => panic!("could not parse config at: {:?}: error: {:?}", path, e),
-            };
-            log::info!("parsed config file at: {:?}", path);
-            return config;
-        } else {
-            return create_default_config(&path);
+        match std::fs::read_to_string(&path) {
+            Ok(body) => {
+                log::info!("read config file at: {:?}", path);
+                let config: Config = match parse_config(&body) {
+                    Ok(config) => config,
+                    Err(e) => panic!("could not parse config at: {:?}: error: {:?}", path, e),
+                };
+                log::info!("parsed config file at: {:?}", path);
+                config
+            }
+            Err(err) => match err.kind() {
+                std::io::ErrorKind::NotFound => create_default_config(&path),
+                _ => panic!("could not read config at: {:?}: error: {:?}", path, err),
+            },
         }
     }
 }
