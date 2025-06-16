@@ -20,7 +20,7 @@ enum Command {
 #[derive(Debug, clap::Args)]
 struct ListArgs {}
 
-pub fn run(context: Context, args: Args) -> Result<(), anyhow::Error> {
+pub fn run(context: &Context, args: Args) -> Result<(), anyhow::Error> {
     match args.command {
         Command::List(args) => run_list(context, args),
     }
@@ -68,7 +68,7 @@ fn list_todos_json(todos: Vec<Todo>) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn run_list(context: Context, _: ListArgs) -> Result<(), anyhow::Error> {
+fn run_list(context: &Context, _: ListArgs) -> Result<(), anyhow::Error> {
     let file_map = context
         .store
         .files

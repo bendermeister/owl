@@ -7,7 +7,7 @@ pub struct Args {
     phrase: String,
 }
 
-pub fn run(context: Context, args: Args) -> Result<(), anyhow::Error> {
+pub fn run(context: &Context, args: Args) -> Result<(), anyhow::Error> {
     let paths = tfidf::rank(&context.store, &args.phrase);
     for path in paths {
         println!("{:?}", path);

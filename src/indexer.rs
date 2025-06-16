@@ -237,6 +237,7 @@ pub fn index(store: &mut Store, path: &Path) {
 
         for (term, frequency) in new_terms.into_iter() {
             let term_id = store.term_id();
+            idf_to_update.insert(term_id, 0);
             store.terms.push(store::Term { id: term_id, term });
             store.term_frequencies.push(store::TermFrequency {
                 term: term_id,

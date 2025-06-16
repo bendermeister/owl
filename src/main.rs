@@ -40,13 +40,14 @@ fn main() {
     // TODO: log this
     indexer::index(&mut store, home_directory.as_path());
 
-    let context = Context {
+    let mut context = Context {
         store,
         config,
         output_format: OutputFormat::Colorful,
     };
 
-
     // todo: log this
-    cli::run(context).unwrap();
+    cli::run(&mut context).unwrap();
+
+    context.store.close(&context.config.store_path).unwrap();
 }
