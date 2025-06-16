@@ -1,8 +1,8 @@
-use crate::store::Store;
+use crate::file_format::FileFormat;
 use crate::stemmer;
+use crate::store::Store;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use crate::file_format::FileFormat;
 
 fn term_histogram_plain_text(body: &str) -> HashMap<String, u64> {
     let terms = body.split_whitespace().map(stemmer::stem);
@@ -18,9 +18,16 @@ fn term_histogram_plain_text(body: &str) -> HashMap<String, u64> {
 
 pub fn term_histogram(body: &str, path: &Path) -> HashMap<String, u64> {
     match FileFormat::new(path) {
-        crate::file_format::FileFormat::Unknown => HashMap::new(),
-        crate::file_format::FileFormat::Markdown => term_histogram_plain_text(body),
-        crate::file_format::FileFormat::Typst => term_histogram_plain_text(body),
+        FileFormat::Unknown => HashMap::new(),
+        FileFormat::Markdown => term_histogram_plain_text(body),
+        FileFormat::Typst => term_histogram_plain_text(body),
+        FileFormat::C => HashMap::new(),
+        FileFormat::CPP => HashMap::new(),
+        FileFormat::Rust => HashMap::new(),
+        FileFormat::Go => HashMap::new(),
+        FileFormat::Java => HashMap::new(),
+        FileFormat::JavaScript => HashMap::new(),
+        FileFormat::TypeScript => HashMap::new(),
     }
 }
 
@@ -71,5 +78,4 @@ pub fn rank(store: &Store, phrase: &str) -> Vec<PathBuf> {
     ranking.sort_by(|a, b| a.1.cmp(&b.1));
 
     ranking.into_iter().map(|(a, _)| a).collect()
-
 }

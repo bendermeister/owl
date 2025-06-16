@@ -28,7 +28,41 @@ pub fn parse_todos(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error> 
         FileFormat::Unknown => Ok(Vec::new()),
         FileFormat::Markdown => parse_todos_markdown(body, path),
         FileFormat::Typst => parse_todos_typst(body, path),
+        FileFormat::C => parse_todos_clike(body, path),
+        FileFormat::CPP => parse_todos_clike(body, path),
+        FileFormat::Rust => parse_todos_clike(body, path),
+        FileFormat::Go => parse_todos_clike(body, path),
+        FileFormat::Java => parse_todos_clike(body, path),
+        FileFormat::JavaScript => parse_todos_clike(body, path),
+        FileFormat::TypeScript => parse_todos_clike(body, path),
     }
+}
+
+fn parse_todos_clike(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
+    let mut buf = Vec::new();
+
+    for (line_number, line) in body.lines().map(|l| l.trim()).enumerate() {
+        let line_number = line_number + 1;
+        if let Some(title) = line.strip_prefix("// TODO:") {
+            buf.push(Todo::new(title, path.to_owned(), line_number));
+        }
+
+        if let Some(stamp) = line.strip_prefix("// - DEADLINE:") {
+            let stamp: TimeStamp = stamp.trim().parse()?;
+            if let Some(todo) = buf.last_mut() {
+                todo.deadline = Some(stamp);
+            }
+        }
+
+        if let Some(stamp) = line.strip_prefix("// - SCHEDULED:") {
+            let stamp: TimeStamp = stamp.trim().parse()?;
+            if let Some(todo) = buf.last_mut() {
+                todo.scheduled = Some(stamp);
+            }
+        }
+    }
+
+    Ok(buf)
 }
 
 fn parse_todos_typst(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error> {

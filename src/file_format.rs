@@ -5,6 +5,14 @@ pub enum FileFormat {
     Unknown,
     Markdown,
     Typst,
+
+    C,
+    CPP,
+    Rust, 
+    Go,
+    Java,
+    JavaScript,
+    TypeScript,
 }
 
 impl FileFormat {
@@ -19,6 +27,20 @@ impl FileFormat {
         match extension.to_str() {
             Some("md") => Self::Markdown,
             Some("typ") => Self::Typst,
+
+            Some("c") => Self::C,
+            Some("h") => Self::C,
+
+            Some("cpp") => Self::CPP,
+            Some("cc") => Self::CPP,
+            Some("hh") => Self::CPP,
+
+            Some("rs") => Self::Rust,
+            Some("go") => Self::Go,
+            Some("java") => Self::Java,
+            Some("js") => Self::JavaScript,
+            Some("ts") => Self::TypeScript,
+
             _ => Self::Unknown,
         }
     }
