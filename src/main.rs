@@ -38,7 +38,7 @@ fn main() {
     let mut store = Store::open(&config.store_path);
 
     // TODO: log this
-    indexer::index(&mut store, home_directory.as_path());
+    indexer::index(&config, &mut store, home_directory.as_path());
 
     let mut context = Context {
         store,

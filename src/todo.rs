@@ -35,6 +35,7 @@ pub fn parse_todos(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error> 
         FileFormat::Java => parse_todos_clike(body, path),
         FileFormat::JavaScript => parse_todos_clike(body, path),
         FileFormat::TypeScript => parse_todos_clike(body, path),
+        FileFormat::CSharp => parse_todos_clike(body, path),
     }
 }
 

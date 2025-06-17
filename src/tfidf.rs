@@ -28,6 +28,7 @@ pub fn term_histogram(body: &str, path: &Path) -> HashMap<String, u64> {
         FileFormat::Java => HashMap::new(),
         FileFormat::JavaScript => HashMap::new(),
         FileFormat::TypeScript => HashMap::new(),
+        FileFormat::CSharp => HashMap::new(),
     }
 }
 

@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Config {
     pub store_path: PathBuf,
+    pub ignore: Vec<Vec<u8>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
@@ -41,11 +42,8 @@ ignore_hidden_files = true
 # ignore globs: use this to specifically exclude directories or files from
 # indexing. You can also use globs and environment variables.
 ignore = [
-    "*/.cargo/*",
-    "*/node_modules/*",
-    "*/go/pkg/*",
-    "$HOME/.config/*",
-    "$HOME/.local/*",
+    "**/node_modules/**",
+    "**/go/pkg/**",
 ]
 
 # directory where the indexing should start
@@ -105,12 +103,41 @@ fn parse_config(body: &str) -> Result<Config, anyhow::Error> {
 
     let store_path = match un_envvar_path(store_path) {
         Ok(path) => path,
-        Err(err) => return Err(anyhow::anyhow!("could not build path to store, error: {:?}", err)),
+        Err(err) => {
+            return Err(anyhow::anyhow!(
+                "could not build path to store, error: {:?}",
+                err
+            ));
+        }
     };
 
-    Ok(Config {
-        store_path,
-    })
+    let ignore = config_raw.ignore.unwrap_or_else(|| {
+        log::warn!("no ignore list present in config file, using default");
+        vec![
+            "*/.cargo/*".into(),
+            "*/node_modules/*".into(),
+            "*/go/pkg/*".into(),
+            "$HOME/.config/*".into(),
+            "$HOME/.local/*".into(),
+        ]
+    });
+
+    let ignore: Result<Vec<Vec<u8>>, anyhow::Error> = ignore
+        .into_iter()
+        .map(|path| un_envvar_path(&path).map(|path| path.as_os_str().as_encoded_bytes().to_vec()))
+        .collect();
+
+    let ignore = match ignore {
+        Ok(ignore) => ignore,
+        Err(err) => {
+            return Err(anyhow::anyhow!(
+                "could not resolve environment variables in ignore list: {:?}",
+                err
+            ));
+        }
+    };
+
+    Ok(Config { store_path, ignore })
 }
 
 impl Config {

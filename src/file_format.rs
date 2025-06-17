@@ -13,6 +13,7 @@ pub enum FileFormat {
     Java,
     JavaScript,
     TypeScript,
+    CSharp,
 }
 
 impl FileFormat {
@@ -40,6 +41,7 @@ impl FileFormat {
             Some("java") => Self::Java,
             Some("js") => Self::JavaScript,
             Some("ts") => Self::TypeScript,
+            Some("cs") => Self::CSharp,
 
             _ => Self::Unknown,
         }
