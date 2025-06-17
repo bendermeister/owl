@@ -1,9 +1,11 @@
+use crate::config::Config;
 use crate::file_format::FileFormat;
 use crate::store;
 use crate::store::Store;
 use crate::tfidf;
 use crate::time_stamp::TimeStamp;
 use crate::todo;
+use fast_glob::glob_match;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -12,7 +14,7 @@ struct DirFile {
     modified: TimeStamp,
 }
 
-pub fn index(store: &mut Store, path: &Path) {
+pub fn index(config: &Config, store: &mut Store, path: &Path) {
     // find all suitable files in path
     if !path.is_dir() {
         panic!(
@@ -37,7 +39,7 @@ pub fn index(store: &mut Store, path: &Path) {
                 continue;
             }
         };
-        for entry in dir {
+        'entry_loop: for entry in dir {
             let entry = match entry {
                 Ok(entry) => entry,
                 Err(err) => {
@@ -56,6 +58,15 @@ pub fn index(store: &mut Store, path: &Path) {
             }
 
             let file_path = entry.path();
+
+            for ignore_path in config.ignore.iter() {
+                // if glob::matches(file_path.as_os_str().as_encoded_bytes(), ignore_path) {
+                //     continue 'entry_loop;
+                // }
+                if glob_match(file_path.as_os_str().as_encoded_bytes(), ignore_path) {
+                    continue 'entry_loop;
+                }
+            }
 
             if file_path.is_dir() {
                 log::info!("discovered directory: {:?}", file_path);
