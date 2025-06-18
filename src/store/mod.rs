@@ -1,4 +1,4 @@
-use crate::time_stamp::TimeStamp;
+use crate::time;
 use std::path::{Path, PathBuf};
 
 mod id;
@@ -8,7 +8,7 @@ pub use id::ID;
 pub struct File {
     pub id: ID<Self>,
     pub path: PathBuf,
-    pub modified: TimeStamp,
+    pub modified: time::Stamp,
 }
 
 impl id::IDAble for File {}
@@ -50,8 +50,8 @@ pub struct Todo {
     pub file: ID<File>,
     pub line_number: usize,
     pub title: String,
-    pub deadline: Option<TimeStamp>,
-    pub scheduled: Option<TimeStamp>,
+    pub deadline: Option<time::Stamp>,
+    pub scheduled: Option<time::Stamp>,
 }
 
 impl Default for Store {

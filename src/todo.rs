@@ -1,13 +1,13 @@
 use crate::file_format::FileFormat;
-use crate::time_stamp::TimeStamp;
+use crate::time;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Todo {
     pub title: String,
     pub file: PathBuf,
-    pub deadline: Option<TimeStamp>,
-    pub scheduled: Option<TimeStamp>,
+    pub deadline: Option<time::Stamp>,
+    pub scheduled: Option<time::Stamp>,
     pub line_number: usize,
 }
 
@@ -49,14 +49,14 @@ fn parse_todos_clike(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error
         }
 
         if let Some(stamp) = line.strip_prefix("// - DEADLINE:") {
-            let stamp: TimeStamp = stamp.trim().parse()?;
+            let stamp: time::Stamp = stamp.trim().parse()?;
             if let Some(todo) = buf.last_mut() {
                 todo.deadline = Some(stamp);
             }
         }
 
         if let Some(stamp) = line.strip_prefix("// - SCHEDULED:") {
-            let stamp: TimeStamp = stamp.trim().parse()?;
+            let stamp: time::Stamp = stamp.trim().parse()?;
             if let Some(todo) = buf.last_mut() {
                 todo.scheduled = Some(stamp);
             }
@@ -96,14 +96,14 @@ fn parse_todos_typst(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error
         }
 
         if let Some(stamp) = line.strip_prefix("- DEADLINE:") {
-            let stamp: TimeStamp = stamp.trim().parse()?;
+            let stamp: time::Stamp = stamp.trim().parse()?;
             if let Some(todo) = buf.last_mut() {
                 todo.deadline = Some(stamp);
             }
         }
 
         if let Some(stamp) = line.strip_prefix("- SCHEDULED:") {
-            let stamp: TimeStamp = stamp.trim().parse()?;
+            let stamp: time::Stamp = stamp.trim().parse()?;
             if let Some(todo) = buf.last_mut() {
                 todo.scheduled = Some(stamp);
             }
@@ -143,14 +143,14 @@ fn parse_todos_markdown(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Er
         }
 
         if let Some(stamp) = line.strip_prefix("> DEADLINE:") {
-            let stamp: TimeStamp = stamp.trim().parse()?;
+            let stamp: time::Stamp = stamp.trim().parse()?;
             if let Some(todo) = buf.last_mut() {
                 todo.deadline = Some(stamp);
             }
         }
 
         if let Some(stamp) = line.strip_prefix("> SCHEDULED:") {
-            let stamp: TimeStamp = stamp.trim().parse()?;
+            let stamp: time::Stamp = stamp.trim().parse()?;
             if let Some(todo) = buf.last_mut() {
                 todo.scheduled = Some(stamp);
             }
@@ -170,8 +170,8 @@ mod test {
 # This should be a normal heading
 ## TODO: first todo
 ## TODO: second todo
-> DEADLINE: <2025-12-01 12:00>
-> SCHEDULED: <2025-11-30 14:15>
+> DEADLINE: 2025-12-01 12:00
+> SCHEDULED: 2025-11-30 14:15
 ### TODO: third todo
 #### TODO: fourth todo
 there should be some normal text here
@@ -192,8 +192,8 @@ there should be some normal text here
                 title: "second todo".into(),
                 file: path.clone(),
                 line_number: 4,
-                deadline: Some(TimeStamp::from_ymd_hm(2025, 12, 1, 12, 0).unwrap()),
-                scheduled: Some(TimeStamp::from_ymd_hm(2025, 11, 30, 14, 15).unwrap()),
+                deadline: Some(time::Stamp::from_ymd_hm(2025, 12, 1, 12, 0).unwrap()),
+                scheduled: Some(time::Stamp::from_ymd_hm(2025, 11, 30, 14, 15).unwrap()),
             },
             Todo {
                 title: "third todo".into(),
@@ -222,8 +222,8 @@ there should be some normal text here
 = This should be a normal heading
 = TODO: first todo
 == TODO: second todo
-- DEADLINE: <2025-12-01 12:00>
-- SCHEDULED: <2025-11-30 14:15>
+- DEADLINE: 2025-12-01 12:00
+- SCHEDULED: 2025-11-30 14:15
 === TODO: third todo
 ==== TODO: fourth todo
 there should be some normal text here
@@ -243,8 +243,8 @@ there should be some normal text here
                 title: "second todo".into(),
                 file: path.clone(),
                 line_number: 4,
-                deadline: Some(TimeStamp::from_ymd_hm(2025, 12, 1, 12, 0).unwrap()),
-                scheduled: Some(TimeStamp::from_ymd_hm(2025, 11, 30, 14, 15).unwrap()),
+                deadline: Some(time::Stamp::from_ymd_hm(2025, 12, 1, 12, 0).unwrap()),
+                scheduled: Some(time::Stamp::from_ymd_hm(2025, 11, 30, 14, 15).unwrap()),
             },
             Todo {
                 title: "third todo".into(),
