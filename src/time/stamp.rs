@@ -1,11 +1,34 @@
+use super::ClockTime;
+use std::fmt::Display;
 use std::str::FromStr;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use super::Duration;
 use chrono::prelude::*;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(
+    Debug, PartialEq, Eq, Clone, Copy, serde::Serialize, serde::Deserialize, PartialOrd, Ord,
+)]
 pub struct Stamp {
     stamp: i64,
+}
+
+impl Display for Stamp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let dt: DateTime<Utc> = self.into();
+        let dt: DateTime<Local> = dt.into();
+
+        write!(
+            f,
+            "{:0>4}-{:0>2}-{:0>2} {:>02}:{:>02}",
+            dt.year(),
+            dt.month(),
+            dt.day(),
+            dt.hour(),
+            dt.minute(),
+        )
+    }
 }
 
 impl Stamp {
@@ -17,8 +40,15 @@ impl Stamp {
         Self::new(chrono::Local::now().timestamp())
     }
 
+    pub fn to_day(&self) -> Self {
+        let dt: chrono::DateTime<Utc> = self.into();
+        let dt: chrono::DateTime<Local> = dt.into();
+
+        Self::from_ymd(dt.year(), dt.month(), dt.day()).unwrap()
+    }
+
     pub fn today() -> Self {
-        let dt: DateTime<Utc> = Self::now().into();
+        let dt = chrono::Utc::now();
         Self::from_ymd(dt.year(), dt.month(), dt.day()).unwrap()
     }
 
@@ -79,30 +109,17 @@ fn parse_yyyymmdd(s: &str) -> Option<(i16, i16, i16)> {
     Some((year, month, day))
 }
 
-fn parse_hhmm(s: &str) -> Option<(i16, i16)> {
-    let mut s = s.trim().split(":").map(|s| s.parse::<i16>());
-
-    let hour = match s.next() {
-        Some(Ok(i)) => i,
-        _ => return None,
-    };
-
-    let min = match s.next() {
-        Some(Ok(i)) => i,
-        _ => return None,
-    };
-
-    if s.next().is_some() {
-        return None;
-    }
-
-    Some((hour, min))
-}
-
 impl From<&Stamp> for DateTime<Utc> {
     // TODO: can this realisticly fail?
     fn from(stamp: &Stamp) -> Self {
         DateTime::from_timestamp(stamp.stamp, 0).unwrap()
+    }
+}
+
+impl From<SystemTime> for Stamp {
+    fn from(value: SystemTime) -> Self {
+        // TODO: can this fail
+        Stamp::new(value.duration_since(UNIX_EPOCH).unwrap().as_secs() as i64)
     }
 }
 
@@ -129,24 +146,8 @@ impl FromStr for Stamp {
         };
 
         if let Some(time) = s.next() {
-            let (hour, min) = match parse_hhmm(time) {
-                Some(s) => s,
-                None => return Err(anyhow::anyhow!("could not parse date")),
-            };
-
-            if hour < 0 || hour > 23 {
-                return Err(anyhow::anyhow!("could not parse date"));
-            }
-
-            if min < 0 || min > 59 {
-                return Err(anyhow::anyhow!("could not parse date"));
-            }
-
-            let hour = Duration::hours(hour as i64);
-            let min = Duration::minutes(min as i64);
-
-            base = base.add_duration(hour);
-            base = base.add_duration(min);
+            let time = time.parse::<ClockTime>()?;
+            base = base.add_duration(time.into());
         }
 
         if s.next().is_some() {

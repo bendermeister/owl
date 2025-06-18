@@ -3,7 +3,7 @@ use crate::file_format::FileFormat;
 use crate::store;
 use crate::store::Store;
 use crate::tfidf;
-use crate::time_stamp::TimeStamp;
+use crate::time;
 use crate::todo;
 use fast_glob::glob_match;
 use std::collections::{HashMap, HashSet};
@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 struct DirFile {
     path: PathBuf,
-    modified: TimeStamp,
+    modified: time::Stamp,
 }
 
 pub fn index(config: &Config, store: &mut Store, path: &Path) {
@@ -133,7 +133,7 @@ pub fn index(config: &Config, store: &mut Store, path: &Path) {
             > store_map
                 .get(f.path.as_path())
                 .map(|v| v.modified)
-                .unwrap_or(TimeStamp::new(0))
+                .unwrap_or(time::Stamp::new(0))
     });
 
     // those files need to be removed from the store
@@ -279,7 +279,7 @@ pub fn index(config: &Config, store: &mut Store, path: &Path) {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    // use super::*;
 
     //
     //     #[test]

@@ -1,3 +1,5 @@
+use super::ClockTime;
+use std::ops::Add;
 use std::str::FromStr;
 
 #[derive(
@@ -12,10 +14,13 @@ impl FromStr for Duration {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().chars().last() {
-            Some('d') => Ok(Self::days(s.strip_suffix("d").unwrap().trim().parse()?)),
-            Some('w') => Ok(Self::weeks(s.strip_suffix("w").unwrap().trim().parse()?)),
-            Some('m') => Ok(Self::months(s.strip_suffix("m").unwrap().trim().parse()?)),
-            Some('y') => Ok(Self::years(s.strip_suffix("y").unwrap().trim().parse()?)),
+            Some('s') => Ok(Self::seconds(s.strip_suffix("s").unwrap().trim().parse()?)),
+            Some('m') => Ok(Self::minutes(s.strip_suffix("m").unwrap().trim().parse()?)),
+            Some('h') => Ok(Self::hours(s.strip_suffix("h").unwrap().trim().parse()?)),
+            Some('D') => Ok(Self::days(s.strip_suffix("D").unwrap().trim().parse()?)),
+            Some('W') => Ok(Self::weeks(s.strip_suffix("W").unwrap().trim().parse()?)),
+            Some('M') => Ok(Self::months(s.strip_suffix("M").unwrap().trim().parse()?)),
+            Some('Y') => Ok(Self::years(s.strip_suffix("Y").unwrap().trim().parse()?)),
             _ => Err(anyhow::anyhow!("could not parse '{:?}' as duration", s)),
         }
     }
@@ -67,91 +72,109 @@ impl Duration {
     }
 }
 
+impl Add for Duration {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            seconds: self.seconds + rhs.seconds,
+        }
+    }
+}
+
+impl From<ClockTime> for Duration {
+    fn from(time: ClockTime) -> Self {
+        let hours = Duration::hours(time.hours());
+        let minutes = Duration::minutes(time.minutes());
+        hours + minutes
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
     fn test_parse_day() {
-        let got: Duration = "7d".parse().unwrap();
+        let got: Duration = "7D".parse().unwrap();
         assert_eq!(Duration::days(7), got);
 
-        let got: Duration = "-7d".parse().unwrap();
+        let got: Duration = "-7D".parse().unwrap();
         assert_eq!(Duration::days(-7), got);
 
-        let got: Duration = "+7d".parse().unwrap();
+        let got: Duration = "+7D".parse().unwrap();
         assert_eq!(Duration::days(7), got);
 
-        let got: Duration = "7 d".parse().unwrap();
+        let got: Duration = "7 D".parse().unwrap();
         assert_eq!(Duration::days(7), got);
 
-        let got: Duration = "-7 d".parse().unwrap();
+        let got: Duration = "-7 D".parse().unwrap();
         assert_eq!(Duration::days(-7), got);
 
-        let got: Duration = "+7 d".parse().unwrap();
+        let got: Duration = "+7 D".parse().unwrap();
         assert_eq!(Duration::days(7), got);
     }
 
     #[test]
     fn test_parse_week() {
-        let got: Duration = "7w".parse().unwrap();
+        let got: Duration = "7W".parse().unwrap();
         assert_eq!(Duration::weeks(7), got);
 
-        let got: Duration = "-7w".parse().unwrap();
+        let got: Duration = "-7W".parse().unwrap();
         assert_eq!(Duration::weeks(-7), got);
 
-        let got: Duration = "+7w".parse().unwrap();
+        let got: Duration = "+7W".parse().unwrap();
         assert_eq!(Duration::weeks(7), got);
 
-        let got: Duration = "7 w".parse().unwrap();
+        let got: Duration = "7 W".parse().unwrap();
         assert_eq!(Duration::weeks(7), got);
 
-        let got: Duration = "-7 w".parse().unwrap();
+        let got: Duration = "-7 W".parse().unwrap();
         assert_eq!(Duration::weeks(-7), got);
 
-        let got: Duration = "+7 w".parse().unwrap();
+        let got: Duration = "+7 W".parse().unwrap();
         assert_eq!(Duration::weeks(7), got);
     }
 
     #[test]
     fn test_parse_month() {
-        let got: Duration = "7m".parse().unwrap();
+        let got: Duration = "7M".parse().unwrap();
         assert_eq!(Duration::months(7), got);
 
-        let got: Duration = "-7m".parse().unwrap();
+        let got: Duration = "-7M".parse().unwrap();
         assert_eq!(Duration::months(-7), got);
 
-        let got: Duration = "+7m".parse().unwrap();
+        let got: Duration = "+7M".parse().unwrap();
         assert_eq!(Duration::months(7), got);
 
-        let got: Duration = "7 m".parse().unwrap();
+        let got: Duration = "7 M".parse().unwrap();
         assert_eq!(Duration::months(7), got);
 
-        let got: Duration = "-7 m".parse().unwrap();
+        let got: Duration = "-7 M".parse().unwrap();
         assert_eq!(Duration::months(-7), got);
 
-        let got: Duration = "+7 m".parse().unwrap();
+        let got: Duration = "+7 M".parse().unwrap();
         assert_eq!(Duration::months(7), got);
     }
 
     #[test]
     fn test_parse_year() {
-        let got: Duration = "7y".parse().unwrap();
+        let got: Duration = "7Y".parse().unwrap();
         assert_eq!(Duration::years(7), got);
 
-        let got: Duration = "-7y".parse().unwrap();
+        let got: Duration = "-7Y".parse().unwrap();
         assert_eq!(Duration::years(-7), got);
 
-        let got: Duration = "+7y".parse().unwrap();
+        let got: Duration = "+7Y".parse().unwrap();
         assert_eq!(Duration::years(7), got);
 
-        let got: Duration = "7 y".parse().unwrap();
+        let got: Duration = "7 Y".parse().unwrap();
         assert_eq!(Duration::years(7), got);
 
-        let got: Duration = "-7 y".parse().unwrap();
+        let got: Duration = "-7 Y".parse().unwrap();
         assert_eq!(Duration::years(-7), got);
 
-        let got: Duration = "+7 y".parse().unwrap();
+        let got: Duration = "+7 Y".parse().unwrap();
         assert_eq!(Duration::years(7), got);
     }
 
