@@ -52,18 +52,20 @@ pub fn index(config: &Config, store: &mut Store, path: &Path) {
                 }
             };
 
-            // TODO: this cannot be the right way
-            if entry.file_name().as_os_str().as_encoded_bytes()[0] == b'.' {
-                continue;
+            if config.ignore_hidden_files {
+                // TODO: this cannot be the right way
+                if entry.file_name().as_os_str().as_encoded_bytes()[0] == b'.' {
+                    continue;
+                }
             }
 
             let file_path = entry.path();
-
-            for ignore_path in config.ignore.iter() {
-                // if glob::matches(file_path.as_os_str().as_encoded_bytes(), ignore_path) {
-                //     continue 'entry_loop;
-                // }
-                if glob_match(file_path.as_os_str().as_encoded_bytes(), ignore_path) {
+            for glob in config.ignore.iter() {
+                if glob_match(
+                    glob.as_os_str().as_encoded_bytes(),
+                    file_path.as_os_str().as_encoded_bytes(),
+                ) {
+                    println!("glob_match");
                     continue 'entry_loop;
                 }
             }
@@ -279,6 +281,18 @@ pub fn index(config: &Config, store: &mut Store, path: &Path) {
 
 #[cfg(test)]
 mod test {
+    use super::*;
+
+    #[test]
+    fn test_glob_matching() {
+        let glob: PathBuf = "**/node_modules/**".into();
+        let path: PathBuf = "/home/user/Repo/project/node_modules/file.js".into();
+        assert!(fast_glob::glob_match(
+            glob.as_os_str().as_encoded_bytes(),
+            path.as_os_str().as_encoded_bytes()
+        ));
+    }
+
     // use super::*;
 
     //

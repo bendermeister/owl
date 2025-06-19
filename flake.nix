@@ -23,6 +23,7 @@
             sqlitebrowser
             sqlite
             gdb
+            gdbgui
           ];
         };
       }

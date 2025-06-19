@@ -1,41 +1,19 @@
 use crate::context::Context;
-use crate::table;
 use crate::todo::Todo;
 use serde_json;
 use std::collections::HashMap;
 
 fn list_todos_plain(todos: Vec<Todo>) -> Result<(), anyhow::Error> {
-    let table = table::Row::new()
-        .add_col("Title".into())
-        .add_col("Scheduled".into())
-        .add_col("Deadline".into())
-        .add_col("File".into());
-
-    let mut table = table::Table::new(table);
-
-    for todo in todos {
-        let row = table::Row::new()
-            .add_col(todo.title)
-            .add_col(
-                todo.scheduled
-                    .map(|v| v.to_string())
-                    .unwrap_or_else(|| "".into()),
-            )
-            .add_col(
-                todo.deadline
-                    .map(|v| v.to_string())
-                    .unwrap_or_else(|| "".into()),
-            )
-            .add_col(format!(
-                "{}:{}",
-                todo.file.to_string_lossy(),
-                todo.line_number
-            ));
-
-        table.push(row);
+    for todo in todos.iter() {
+        print!("{} TODO: {}", todo.file.as_os_str().to_string_lossy(), todo.title);
+        if let Some(stamp) = todo.scheduled {
+            print!("SCHEDULED: {}", stamp.to_pretty_string());
+        }
+        if let Some(stamp) = todo.deadline {
+            print!("DEADLINE: {}", stamp.to_pretty_string());
+        }
+        println!();
     }
-
-    println!("{}", table);
     Ok(())
 }
 

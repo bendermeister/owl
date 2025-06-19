@@ -3,8 +3,9 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Config {
     pub store_path: PathBuf,
-    pub ignore: Vec<Vec<u8>>,
+    pub ignore: Vec<PathBuf>,
     pub base_directory: PathBuf,
+    pub ignore_hidden_files: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
@@ -87,7 +88,6 @@ fn un_envvar_path(input: &str) -> Result<PathBuf, anyhow::Error> {
             path.push(parent);
         }
     }
-
     Ok(path)
 }
 
@@ -123,9 +123,9 @@ fn parse_config(body: &str) -> Result<Config, anyhow::Error> {
         ]
     });
 
-    let ignore: Result<Vec<Vec<u8>>, anyhow::Error> = ignore
+    let ignore: Result<Vec<PathBuf>, anyhow::Error> = ignore
         .into_iter()
-        .map(|path| un_envvar_path(&path).map(|path| path.as_os_str().as_encoded_bytes().to_vec()))
+        .map(|path| un_envvar_path(&path))
         .collect();
 
     let ignore = match ignore {
@@ -154,7 +154,16 @@ fn parse_config(body: &str) -> Result<Config, anyhow::Error> {
         ),
     };
 
+    let ignore_hidden_files = match config_raw.ignore_hidden_files {
+        Some(v) => v,
+        None => {
+            log::warn!("ignore_hidden_files not present in config using default: false");
+            true
+        }
+    };
+
     Ok(Config {
+        ignore_hidden_files,
         store_path,
         ignore,
         base_directory,

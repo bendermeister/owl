@@ -27,10 +27,10 @@ Lists all todos present in markdown files in the given directory. A todo is writ
 # TODO: this is a todo
 
 ## TODO: this is a todo with a deadline
-> DEADLINE: <2025-06-20 12:00>
+> DEADLINE: 2025-06-20 12:00
 
 ## TODO: this is a todo with a scheduled time
-> SCHEDULED: <2025-06-20 12:00>
+> SCHEDULED: 2025-06-20 12:00
 ```
 
 ### Search
