@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 pub struct Config {
     pub store_path: PathBuf,
     pub ignore: Vec<Vec<u8>>,
+    pub base_directory: PathBuf,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
@@ -137,7 +138,27 @@ fn parse_config(body: &str) -> Result<Config, anyhow::Error> {
         }
     };
 
-    Ok(Config { store_path, ignore })
+    let base_directory = match &config_raw.base_directory {
+        Some(dir) => dir,
+        None => {
+            log::warn!("no base_directory present in config file, using default");
+            "$HOME"
+        }
+    };
+
+    let base_directory = match un_envvar_path(base_directory) {
+        Ok(path) => path,
+        Err(err) => panic!(
+            "could not resolve environment variables in base_directory: '{:?}': error: {:?}",
+            base_directory, err
+        ),
+    };
+
+    Ok(Config {
+        store_path,
+        ignore,
+        base_directory,
+    })
 }
 
 impl Config {

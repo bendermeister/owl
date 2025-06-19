@@ -3,7 +3,6 @@ use owl::config::Config;
 use owl::context::{Context, OutputFormat};
 use owl::indexer;
 use owl::store::Store;
-use std::path::PathBuf;
 
 fn logger_init() {
     let level = if let Ok(level) = std::env::var("LOG_LEVEL") {
@@ -27,18 +26,11 @@ fn logger_init() {
 fn main() {
     logger_init();
 
-    let home_directory: PathBuf = match std::env::var("HOME") {
-        Ok(path) => path.into(),
-        Err(e) => panic!("could not read $HOME environment variable: error: {:?}", e),
-    };
-    log::info!("read $HOME environment variable");
-
     let config = Config::open();
 
     let mut store = Store::open(&config.store_path);
 
-    // TODO: log this
-    indexer::index(&config, &mut store, home_directory.as_path());
+    indexer::index(&config, &mut store, config.base_directory.as_path());
 
     let mut context = Context {
         store,
@@ -46,7 +38,7 @@ fn main() {
         output_format: OutputFormat::Colorful,
     };
 
-    // todo: log this
+    // TODO: log this
     cli::run(&mut context).unwrap();
 
     context.store.close(&context.config.store_path).unwrap();
