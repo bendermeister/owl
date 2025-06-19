@@ -16,24 +16,55 @@ pub struct Stamp {
 
 impl Display for Stamp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let dt: DateTime<Utc> = self.into();
-        let dt: DateTime<Local> = dt.into();
+        let dt: DateTime<Local> = self.into();
 
-        write!(
-            f,
-            "{:0>4}-{:0>2}-{:0>2} {:>02}:{:>02}",
-            dt.year(),
-            dt.month(),
-            dt.day(),
-            dt.hour(),
-            dt.minute(),
-        )
+        if dt.hour() == 0 && dt.minute() == 0 {
+            write!(f, "{:0>4}-{:0>2}-{:0>2}", dt.year(), dt.month(), dt.day(),)
+        } else {
+            write!(
+                f,
+                "{:0>4}-{:0>2}-{:0>2} {:>02}:{:>02}",
+                dt.year(),
+                dt.month(),
+                dt.day(),
+                dt.hour(),
+                dt.minute(),
+            )
+        }
     }
 }
 
 impl Stamp {
     pub fn new(stamp: i64) -> Self {
         Self { stamp }
+    }
+
+    pub fn to_pretty_string(&self) -> String {
+        let dt: DateTime<Local> = self.into();
+
+        let months = [
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        ];
+
+        if dt.hour() == 0 && dt.minute() == 0 {
+            format!(
+                "{} {} {} {}",
+                dt.weekday(),
+                dt.day(),
+                months[dt.month0() as usize],
+                dt.year()
+            )
+        } else {
+            format!(
+                "{} {} {} {} {:>02}:{:>02}",
+                dt.weekday(),
+                dt.day(),
+                months[dt.month0() as usize],
+                dt.year(),
+                dt.hour(),
+                dt.minute(),
+            )
+        }
     }
 
     pub fn now() -> Self {
@@ -113,6 +144,20 @@ impl From<&Stamp> for DateTime<Utc> {
     // TODO: can this realisticly fail?
     fn from(stamp: &Stamp) -> Self {
         DateTime::from_timestamp(stamp.stamp, 0).unwrap()
+    }
+}
+
+impl From<&Stamp> for DateTime<Local> {
+    fn from(s: &Stamp) -> Self {
+        let dt: DateTime<Utc> = s.into();
+        dt.into()
+    }
+}
+
+impl From<Stamp> for DateTime<Local> {
+    fn from(s: Stamp) -> Self {
+        let dt: DateTime<Utc> = s.into();
+        dt.into()
     }
 }
 

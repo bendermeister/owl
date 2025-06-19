@@ -138,7 +138,7 @@ pub fn run(context: &Context, args: Args) -> Result<(), anyhow::Error> {
 
 fn format_plain(entries: &[Entry]) -> Result<(), anyhow::Error> {
     for entry in entries.iter() {
-        println!("{}", entry.stamp);
+        println!("{}", entry.stamp.to_pretty_string());
         for todo in entry.todos.iter() {
             println!(
                 "\t{}:{} TODO: {}",
