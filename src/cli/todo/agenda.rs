@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use crate::context::Context;
 use crate::time::{Duration, Stamp};
@@ -11,6 +13,52 @@ pub struct Args {
 
     #[clap(long)]
     interval: Option<String>,
+
+    #[clap(long)]
+    path_length: Option<String>,
+}
+
+enum PathLength {
+    Full,
+    None,
+    Len(usize),
+}
+
+impl PathLength {
+    fn cut_path(&self, path: PathBuf) -> Option<PathBuf> {
+        let len = match self {
+            PathLength::Full => return Some(path),
+            PathLength::None => return None,
+            PathLength::Len(len) => *len,
+        };
+
+        let mut components = path.components().collect::<Vec<_>>();
+
+        while components.len() > len {
+            components.remove(0);
+        }
+
+        let mut path = PathBuf::new();
+
+        for c in components.into_iter() {
+            path.push(c);
+        }
+
+        Some(path)
+    }
+}
+
+impl FromStr for PathLength {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "full" => return Ok(Self::Full),
+            "none" => return Ok(Self::None),
+            _ => (),
+        };
+        Ok(Self::Len(s.parse()?))
+    }
 }
 
 fn parse_timespan(part: &str) -> Stamp {
@@ -39,6 +87,15 @@ struct Entry {
 }
 
 pub fn run(context: &Context, args: Args) -> Result<(), anyhow::Error> {
+    let path_length = match args
+        .path_length
+        .unwrap_or_else(|| "2".into())
+        .parse::<PathLength>()
+    {
+        Ok(p) => p,
+        Err(err) => panic!("--path_length could not be parsed: {:?}", err),
+    };
+
     let timespan = args.timespan.unwrap_or_else(|| "today;+7D".into());
     let interval = args.interval.unwrap_or_else(|| "1D".into());
 
@@ -129,30 +186,67 @@ pub fn run(context: &Context, args: Args) -> Result<(), anyhow::Error> {
     }
 
     match context.output_format {
-        crate::context::OutputFormat::Colorful => format_plain(&agenda),
-        crate::context::OutputFormat::Plain => format_plain(&agenda),
+        crate::context::OutputFormat::Colorful => format_plain(&agenda, path_length),
+        crate::context::OutputFormat::Plain => format_plain(&agenda, path_length),
         crate::context::OutputFormat::Json => format_json(&agenda),
     }
 }
 
-fn format_plain(agenda: &Agenda) -> Result<(), anyhow::Error> {
-    println!("Overdue");
+fn format_plain(agenda: &Agenda, path_length: PathLength) -> Result<(), anyhow::Error> {
+    let gray = "\x1b[90m";
+    let reset = "\x1b[0m";
+    let green = "\x1b[32m";
+    let red = "\x1b[31m";
+
+    let render_file = |path: PathBuf, line_number: usize| {
+        let mut path = path_length
+            .cut_path(path)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| String::new());
+        if !path.is_empty() {
+            path.push(':');
+            path.push_str(&line_number.to_string());
+        }
+        path
+    };
+
+    println!("{}Overdue{}", red, reset);
     for todo in agenda.overdue.iter() {
         println!(
-            "\t{}:{} TODO: {}",
-            todo.file.as_os_str().to_string_lossy(),
-            todo.line_number,
+            "\t{} TODO: {}",
+            render_file(todo.file.clone(), todo.line_number),
             todo.title
         );
     }
 
     for entry in agenda.entries.iter() {
-        println!("{}", entry.stamp.to_pretty_string());
+        let mut paths = Vec::new();
         for todo in entry.todos.iter() {
+            paths.push(render_file(todo.file.clone(), todo.line_number));
+        }
+
+        let pad = paths.iter().map(|p| p.len()).max().unwrap_or(0) + 2;
+
+        let paths = paths
+            .into_iter()
+            .map(|path| format!("{}{}{}{}", gray, path, " ".repeat(pad - path.len()), reset));
+
+        println!("{}", entry.stamp.to_pretty_string());
+        for (todo, path) in entry.todos.iter().zip(paths) {
+            if todo.scheduled.is_some() {
+            } else {
+            }
+
+            let t = if todo.scheduled.is_some() {
+                format!("{}S{}", green, reset)
+            } else {
+                format!("{}D{}", red, reset)
+            };
+
             println!(
-                "\t{}:{} TODO: {}",
-                todo.file.as_os_str().to_string_lossy(),
-                todo.line_number,
+                "\t{} {}TODO: {}",
+                t,
+                path,
                 todo.title
             );
         }
