@@ -32,14 +32,14 @@ pub fn run(context: &Context, _: Args) -> Result<(), anyhow::Error> {
         .store
         .files
         .iter()
-        .map(|f| (f.id.clone(), f.path.as_path()))
+        .map(|f| (f.id, f.path.as_path()))
         .collect::<HashMap<_, _>>();
 
     let todos = context.store.todos.iter().map(|t| Todo {
         title: t.title.to_owned(),
         file: file_map.get(&t.file).unwrap().to_path_buf(),
-        deadline: t.deadline.clone(),
-        scheduled: t.scheduled.clone(),
+        deadline: t.deadline,
+        scheduled: t.scheduled,
         line_number: t.line_number,
     }).collect::<Vec<_>>();
 

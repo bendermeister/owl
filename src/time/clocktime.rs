@@ -10,10 +10,10 @@ pub struct ClockTime {
 
 impl ClockTime {
     pub fn from_hm(hours: i64, minutes: i64) -> Option<Self> {
-        if hours < 0 || hours > 23 {
+        if !(0..=23).contains(&hours) {
             return None;
         }
-        if minutes < 0 || minutes > 59 {
+        if !(0..=59).contains(&minutes) {
             return None;
         }
         Some(Self { hours, minutes })

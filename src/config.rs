@@ -58,7 +58,7 @@ base_directory = "$HOME"
     log::info!("mkdir --parents {:?}", config_prefix);
     std::fs::create_dir_all(config_prefix).unwrap();
 
-    match std::fs::write(path, &body) {
+    match std::fs::write(path, body) {
         Ok(_) => log::info!("wrote config to {:?}", path),
         Err(e) => panic!("could not write config to: '{:?}': error: {:?}", path, e),
     };

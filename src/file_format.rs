@@ -20,7 +20,7 @@ impl FileFormat {
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
         path.as_ref()
             .extension()
-            .map(|ext| Self::from_extension(ext))
+            .map(Self::from_extension)
             .unwrap_or(FileFormat::Unknown)
     }
 
@@ -48,10 +48,7 @@ impl FileFormat {
     }
 
     pub fn is_unknown(&self) -> bool {
-        match self {
-            FileFormat::Unknown => true,
-            _ => false,
-        }
+        matches!(self, FileFormat::Unknown)
     }
 
     pub fn is_known(&self) -> bool {

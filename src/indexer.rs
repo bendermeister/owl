@@ -150,7 +150,7 @@ pub fn index(config: &Config, store: &mut Store, path: &Path) {
     let store_set = store
         .files
         .iter()
-        .map(|file| file.id.clone())
+        .map(|file| file.id)
         .collect::<HashSet<_>>();
 
     // idfs of terms which where present in files which are no longer in the store need to be
@@ -159,7 +159,7 @@ pub fn index(config: &Config, store: &mut Store, path: &Path) {
         .term_frequencies
         .iter()
         .filter(|tf| !store_set.contains(&tf.file))
-        .map(|tf| (tf.term.clone(), 0))
+        .map(|tf| (tf.term, 0))
         .collect::<HashMap<_, _>>();
 
     store
@@ -223,7 +223,7 @@ pub fn index(config: &Config, store: &mut Store, path: &Path) {
         let current_terms = store
             .terms
             .iter()
-            .map(|t| (t.term.as_str(), t.id.clone()))
+            .map(|t| (t.term.as_str(), t.id))
             .collect::<HashMap<_, _>>();
 
         let mut new_terms = Vec::new();

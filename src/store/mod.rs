@@ -34,7 +34,7 @@ pub struct InverseDocumentFrequency {
     pub frequency: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Store {
     pub file_id_max: u64,
     pub term_id_max: u64,
@@ -52,20 +52,6 @@ pub struct Todo {
     pub title: String,
     pub deadline: Option<time::Stamp>,
     pub scheduled: Option<time::Stamp>,
-}
-
-impl Default for Store {
-    fn default() -> Self {
-        Self {
-            file_id_max: 0,
-            term_id_max: 0,
-            files: Vec::new(),
-            terms: Vec::new(),
-            term_frequencies: Vec::new(),
-            inverse_document_frequencies: Vec::new(),
-            todos: Vec::new(),
-        }
-    }
 }
 
 fn create_default_store(path: &Path) -> Store {
@@ -105,7 +91,7 @@ impl Store {
                 Err(e) => panic!("failed to parse store at: {:?}: error: {:?}", path, e),
             },
             Err(err) => match err.kind() {
-                std::io::ErrorKind::NotFound => return create_default_store(path),
+                std::io::ErrorKind::NotFound => create_default_store(path),
                 _ => panic!("could not read store at '{:?}': error: {:?}", path, err),
             },
         }

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use crate::context::Context;
@@ -202,7 +202,7 @@ fn format_plain(agenda: &Agenda, path_length: PathLength) -> Result<(), anyhow::
         let mut path = path_length
             .cut_path(path)
             .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|| String::new());
+            .unwrap_or_default();
         if !path.is_empty() {
             path.push(':');
             path.push_str(&line_number.to_string());
@@ -233,22 +233,13 @@ fn format_plain(agenda: &Agenda, path_length: PathLength) -> Result<(), anyhow::
 
         println!("{}", entry.stamp.to_pretty_string());
         for (todo, path) in entry.todos.iter().zip(paths) {
-            if todo.scheduled.is_some() {
-            } else {
-            }
-
             let t = if todo.scheduled.is_some() {
                 format!("{}S{}", green, reset)
             } else {
                 format!("{}D{}", red, reset)
             };
 
-            println!(
-                "\t{} {}TODO: {}",
-                t,
-                path,
-                todo.title
-            );
+            println!("\t{} {}TODO: {}", t, path, todo.title);
         }
     }
 

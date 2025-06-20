@@ -11,7 +11,7 @@ pub struct ID<T: IDAble> {
 
 impl<T: IDAble> Clone for ID<T> {
     fn clone(&self) -> Self {
-        Self::new(self.id)
+        *self
     }
 }
 
