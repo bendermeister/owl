@@ -26,6 +26,10 @@ fn logger_init() {
 fn main() {
     logger_init();
 
+    let today = owl::time::Stamp::now();
+    println!("{}", today.to_pretty_string());
+    println!("{}", today);
+
     let config = Config::open();
 
     let mut store = Store::open(&config.store_path);

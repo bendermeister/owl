@@ -79,7 +79,7 @@ impl Stamp {
     }
 
     pub fn today() -> Self {
-        let dt = chrono::Utc::now();
+        let dt = chrono::Local::now();
         Self::from_ymd(dt.year(), dt.month(), dt.day()).unwrap()
     }
 
