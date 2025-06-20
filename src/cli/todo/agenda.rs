@@ -27,6 +27,12 @@ fn parse_timespan(part: &str) -> Stamp {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct Agenda {
+    overdue: Vec<Todo>,
+    entries: Vec<Entry>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct Entry {
     stamp: Stamp,
     todos: Vec<Todo>,
@@ -69,21 +75,6 @@ pub fn run(context: &Context, args: Args) -> Result<(), anyhow::Error> {
         iter = iter.add_duration(interval);
     }
 
-    let mut todos = context
-        .store
-        .todos
-        .clone()
-        .into_iter()
-        .filter(|todo| {
-            let stamp = match (todo.scheduled, todo.deadline) {
-                (Some(stamp), _) => stamp,
-                (_, Some(stamp)) => stamp,
-                _ => return false,
-            };
-            start <= stamp && stamp <= end
-        })
-        .collect::<Vec<_>>();
-
     let file_map = context
         .store
         .files
@@ -91,53 +82,71 @@ pub fn run(context: &Context, args: Args) -> Result<(), anyhow::Error> {
         .map(|file| (file.id, file.path.as_path()))
         .collect::<HashMap<_, _>>();
 
-    for i in 0..entries.len() {
-        let top_limit = entries
-            .get(i + 1)
-            .map(|e| e.stamp)
-            .unwrap_or_else(|| end.add_duration(Duration::days(1)));
+    let mut agenda = Agenda {
+        overdue: Vec::new(),
+        entries,
+    };
 
-        let mut insert = Vec::with_capacity(todos.len());
-        let mut retain = Vec::with_capacity(todos.len());
+    for todo in context.store.todos.iter() {
+        let stamp = match (todo.scheduled, todo.deadline) {
+            (Some(stamp), _) => stamp,
+            (_, Some(stamp)) => stamp,
+            _ => continue,
+        };
 
-        insert.clear();
-        retain.clear();
-
-        for todo in todos.into_iter() {
-            let stamp = match (todo.scheduled, todo.deadline) {
-                (Some(stamp), _) => stamp,
-                (_, Some(stamp)) => stamp,
-                _ => unreachable!(),
-            };
-            if stamp < top_limit {
-                insert.push(todo);
-            } else {
-                retain.push(todo);
-            }
+        if stamp < start {
+            agenda.overdue.push(Todo {
+                title: todo.title.clone(),
+                file: file_map.get(&todo.file).unwrap().to_path_buf(),
+                deadline: todo.deadline,
+                scheduled: todo.scheduled,
+                line_number: todo.line_number,
+            });
+            continue;
         }
 
-        todos = retain;
+        if stamp > end {
+            continue;
+        }
 
-        let insert = insert.into_iter().map(|t| Todo {
-            title: t.title,
-            file: file_map.get(&t.file).unwrap().to_path_buf(),
-            deadline: t.deadline,
-            scheduled: t.scheduled,
-            line_number: t.line_number,
-        });
-
-        entries[i].todos.extend(insert.into_iter());
+        for i in 0..agenda.entries.len() {
+            let limit = agenda
+                .entries
+                .get(i + 1)
+                .map(|e| e.stamp)
+                .unwrap_or_else(|| end.add_duration(Duration::days(1)));
+            if stamp < limit {
+                agenda.entries[i].todos.push(Todo {
+                    title: todo.title.clone(),
+                    file: file_map.get(&todo.file).unwrap().to_path_buf(),
+                    deadline: todo.deadline,
+                    scheduled: todo.scheduled,
+                    line_number: todo.line_number,
+                });
+                break;
+            }
+        }
     }
 
     match context.output_format {
-        crate::context::OutputFormat::Colorful => format_plain(&entries),
-        crate::context::OutputFormat::Plain => format_plain(&entries),
-        crate::context::OutputFormat::Json => format_json(&entries),
+        crate::context::OutputFormat::Colorful => format_plain(&agenda),
+        crate::context::OutputFormat::Plain => format_plain(&agenda),
+        crate::context::OutputFormat::Json => format_json(&agenda),
     }
 }
 
-fn format_plain(entries: &[Entry]) -> Result<(), anyhow::Error> {
-    for entry in entries.iter() {
+fn format_plain(agenda: &Agenda) -> Result<(), anyhow::Error> {
+    println!("Overdue");
+    for todo in agenda.overdue.iter() {
+        println!(
+            "\t{}:{} TODO: {}",
+            todo.file.as_os_str().to_string_lossy(),
+            todo.line_number,
+            todo.title
+        );
+    }
+
+    for entry in agenda.entries.iter() {
         println!("{}", entry.stamp.to_pretty_string());
         for todo in entry.todos.iter() {
             println!(
@@ -152,8 +161,8 @@ fn format_plain(entries: &[Entry]) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn format_json(entries: &[Entry]) -> Result<(), anyhow::Error> {
-    let body = serde_json::to_string(entries)?;
+fn format_json(agenda: &Agenda) -> Result<(), anyhow::Error> {
+    let body = serde_json::to_string(agenda)?;
     print!("{}", body);
     Ok(())
 }

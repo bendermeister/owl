@@ -65,7 +65,6 @@ pub fn index(config: &Config, store: &mut Store, path: &Path) {
                     glob.as_os_str().as_encoded_bytes(),
                     file_path.as_os_str().as_encoded_bytes(),
                 ) {
-                    println!("glob_match");
                     continue 'entry_loop;
                 }
             }
