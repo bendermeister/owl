@@ -9,7 +9,6 @@ chrono = "0.4.41"
 clap = { version = "4.5.39", features = ["derive"] }
 fast-glob = "0.4.5"
 log = "0.4.27"
-rusqlite = { version = "0.36.0", features = ["bundled"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 simple_logger = "5.0.0"
