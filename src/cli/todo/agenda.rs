@@ -49,7 +49,7 @@ impl PathLength {
 }
 
 impl FromStr for PathLength {
-    type Err = anyhow::Error;
+    type Err = std::num::ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -86,7 +86,7 @@ struct Entry {
     todos: Vec<Todo>,
 }
 
-pub fn run(context: &Context, args: Args) -> Result<(), anyhow::Error> {
+pub fn run(context: &Context, args: Args) {
     let path_length = match args
         .path_len
         .unwrap_or_else(|| "2".into())
@@ -192,7 +192,7 @@ pub fn run(context: &Context, args: Args) -> Result<(), anyhow::Error> {
     }
 }
 
-fn format_plain(agenda: &Agenda, path_length: PathLength) -> Result<(), anyhow::Error> {
+fn format_plain(agenda: &Agenda, path_length: PathLength) {
     let gray = "\x1b[90m";
     let reset = "\x1b[0m";
     let green = "\x1b[32m";
@@ -244,12 +244,9 @@ fn format_plain(agenda: &Agenda, path_length: PathLength) -> Result<(), anyhow::
             println!("\t{} {}TODO: {}", t, path, todo.title);
         }
     }
-
-    Ok(())
 }
 
-fn format_json(agenda: &Agenda) -> Result<(), anyhow::Error> {
-    let body = serde_json::to_string(agenda)?;
+fn format_json(agenda: &Agenda) {
+    let body = serde_json::to_string(agenda).unwrap();
     print!("{}", body);
-    Ok(())
 }

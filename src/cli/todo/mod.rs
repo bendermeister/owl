@@ -20,7 +20,7 @@ enum Command {
     Agenda(agenda::Args),
 }
 
-pub fn run(context: &Context, args: Args) -> Result<(), anyhow::Error> {
+pub fn run(context: &Context, args: Args) {
     match args.command {
         Command::List(args) => list::run(context, args),
         Command::Agenda(args) => agenda::run(context, args),

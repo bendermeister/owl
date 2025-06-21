@@ -1,5 +1,7 @@
 use std::str::FromStr;
 
+use crate::error::Error;
+
 use super::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -40,24 +42,24 @@ impl From<Duration> for ClockTime {
 }
 
 impl FromStr for ClockTime {
-    type Err = anyhow::Error;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut s = s.trim().split(":").map(|p| p.parse::<i64>());
 
         let hours = match s.next() {
             Some(Ok(v)) => v,
-            _ => return Err(anyhow::anyhow!("could not parse clocktime")),
+            _ => return Err(Error::FailedToParse(0)),
         };
 
         let minutes = match s.next() {
             Some(Ok(v)) => v,
-            _ => return Err(anyhow::anyhow!("could not parse clocktime")),
+            _ => return Err(Error::FailedToParse(0)),
         };
 
         match Self::from_hm(hours, minutes) {
             Some(v) => Ok(v),
-            None => Err(anyhow::anyhow!("could not parse clocktime")),
+            _ => Err(Error::FailedToParse(0)),
         }
     }
 }

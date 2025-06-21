@@ -1,3 +1,4 @@
+use crate::error::Error;
 use crate::file_format::FileFormat;
 use crate::time;
 use std::path::{Path, PathBuf};
@@ -23,7 +24,7 @@ impl Todo {
     }
 }
 
-pub fn parse_todos(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
+pub fn parse_todos(body: &str, path: &Path) -> Result<Vec<Todo>, Error> {
     match FileFormat::new(path) {
         FileFormat::Unknown => Ok(Vec::new()),
         FileFormat::Markdown => parse_todos_markdown(body, path),
@@ -39,7 +40,7 @@ pub fn parse_todos(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error> 
     }
 }
 
-fn parse_todos_clike(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
+fn parse_todos_clike(body: &str, path: &Path) -> Result<Vec<Todo>, Error> {
     let mut buf = Vec::new();
 
     for (line_number, line) in body.lines().map(|l| l.trim()).enumerate() {
@@ -49,14 +50,20 @@ fn parse_todos_clike(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error
         }
 
         if let Some(stamp) = line.strip_prefix("// - DEADLINE:") {
-            let stamp: time::Stamp = stamp.trim().parse()?;
+            let stamp: time::Stamp = match stamp.trim().parse() {
+                Ok(stamp) => stamp,
+                Err(_) => return Err(Error::FailedToParse(line_number)),
+            };
             if let Some(todo) = buf.last_mut() {
                 todo.deadline = Some(stamp);
             }
         }
 
         if let Some(stamp) = line.strip_prefix("// - SCHEDULED:") {
-            let stamp: time::Stamp = stamp.trim().parse()?;
+            let stamp: time::Stamp = match stamp.trim().parse() {
+                Ok(stamp) => stamp,
+                Err(_) => return Err(Error::FailedToParse(line_number)),
+            };
             if let Some(todo) = buf.last_mut() {
                 todo.scheduled = Some(stamp);
             }
@@ -66,7 +73,7 @@ fn parse_todos_clike(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error
     Ok(buf)
 }
 
-fn parse_todos_typst(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
+fn parse_todos_typst(body: &str, path: &Path) -> Result<Vec<Todo>, Error> {
     let mut buf = Vec::new();
 
     for (line_number, line) in body.lines().enumerate() {
@@ -96,14 +103,20 @@ fn parse_todos_typst(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error
         }
 
         if let Some(stamp) = line.strip_prefix("- DEADLINE:") {
-            let stamp: time::Stamp = stamp.trim().parse()?;
+            let stamp: time::Stamp = match stamp.trim().parse() {
+                Ok(stamp) => stamp,
+                Err(_) => return Err(Error::FailedToParse(line_number)),
+            };
             if let Some(todo) = buf.last_mut() {
                 todo.deadline = Some(stamp);
             }
         }
 
         if let Some(stamp) = line.strip_prefix("- SCHEDULED:") {
-            let stamp: time::Stamp = stamp.trim().parse()?;
+            let stamp: time::Stamp = match stamp.trim().parse() {
+                Ok(stamp) => stamp,
+                Err(_) => return Err(Error::FailedToParse(line_number)),
+            };
             if let Some(todo) = buf.last_mut() {
                 todo.scheduled = Some(stamp);
             }
@@ -113,7 +126,7 @@ fn parse_todos_typst(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error
     Ok(buf)
 }
 
-fn parse_todos_markdown(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Error> {
+fn parse_todos_markdown(body: &str, path: &Path) -> Result<Vec<Todo>, Error> {
     let mut buf = Vec::new();
 
     for (line_number, line) in body.lines().enumerate() {
@@ -143,14 +156,20 @@ fn parse_todos_markdown(body: &str, path: &Path) -> Result<Vec<Todo>, anyhow::Er
         }
 
         if let Some(stamp) = line.strip_prefix("> DEADLINE:") {
-            let stamp: time::Stamp = stamp.trim().parse()?;
+            let stamp: time::Stamp = match stamp.trim().parse() {
+                Ok(stamp) => stamp,
+                Err(_) => return Err(Error::FailedToParse(line_number)),
+            };
             if let Some(todo) = buf.last_mut() {
                 todo.deadline = Some(stamp);
             }
         }
 
         if let Some(stamp) = line.strip_prefix("> SCHEDULED:") {
-            let stamp: time::Stamp = stamp.trim().parse()?;
+            let stamp: time::Stamp = match stamp.trim().parse() {
+                Ok(stamp) => stamp,
+                Err(_) => return Err(Error::FailedToParse(line_number)),
+            };
             if let Some(todo) = buf.last_mut() {
                 todo.scheduled = Some(stamp);
             }

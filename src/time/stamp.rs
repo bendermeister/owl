@@ -1,4 +1,5 @@
 use super::ClockTime;
+use crate::error::Error;
 use std::fmt::Display;
 use std::str::FromStr;
 use std::time::SystemTime;
@@ -169,7 +170,7 @@ impl From<SystemTime> for Stamp {
 }
 
 impl FromStr for Stamp {
-    type Err = anyhow::Error;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut s = s.split_whitespace();
@@ -180,14 +181,14 @@ impl FromStr for Stamp {
             Some("yesterday") => Some(Self::today().add_duration(Duration::days(-1))),
             Some(a) => match parse_yyyymmdd(a) {
                 Some((y, m, d)) => Self::from_ymd(y as i32, m as u32, d as u32),
-                None => return Err(anyhow::anyhow!("could not parse date")),
+                None => return Err(Error::FailedToParse(0)),
             },
-            None => return Err(anyhow::anyhow!("cannot parse empty string into time stamp")),
+            None => return Err(Error::FailedToParse(0)),
         };
 
         let mut base = match base {
             Some(base) => base,
-            None => return Err(anyhow::anyhow!("could not parse date")),
+            None => return Err(Error::FailedToParse(0)),
         };
 
         if let Some(time) = s.next() {
@@ -196,7 +197,7 @@ impl FromStr for Stamp {
         }
 
         if s.next().is_some() {
-            return Err(anyhow::anyhow!("could not parse date"));
+            return Err(Error::FailedToParse(0));
         }
 
         Ok(base)
