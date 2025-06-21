@@ -15,7 +15,7 @@ pub struct Args {
     interval: Option<String>,
 
     #[clap(long)]
-    path_length: Option<String>,
+    path_len: Option<String>,
 }
 
 enum PathLength {
@@ -88,7 +88,7 @@ struct Entry {
 
 pub fn run(context: &Context, args: Args) -> Result<(), anyhow::Error> {
     let path_length = match args
-        .path_length
+        .path_len
         .unwrap_or_else(|| "2".into())
         .parse::<PathLength>()
     {
@@ -213,8 +213,10 @@ fn format_plain(agenda: &Agenda, path_length: PathLength) -> Result<(), anyhow::
     println!("{}Overdue{}", red, reset);
     for todo in agenda.overdue.iter() {
         println!(
-            "\t{} TODO: {}",
+            "\t{}{}{} TODO: {}",
+            gray,
             render_file(todo.file.clone(), todo.line_number),
+            reset,
             todo.title
         );
     }
