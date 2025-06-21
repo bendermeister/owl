@@ -26,7 +26,7 @@ impl FromStr for Duration {
             _ => return Err(Error::FailedToParse(0)),
         };
 
-        let time: i64 = match s.trim().strip_suffix(suffix).unwrap().parse() {
+        let time: i64 = match s.trim().strip_suffix(suffix).unwrap().trim().parse() {
             Ok(time) => time,
             Err(_) => return Err(Error::FailedToParse(0)),
         };
