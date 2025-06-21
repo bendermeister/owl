@@ -1,3 +1,5 @@
+use crate::error::Error;
+
 use super::ClockTime;
 use std::ops::Add;
 use std::str::FromStr;
@@ -10,18 +12,34 @@ pub struct Duration {
 }
 
 impl FromStr for Duration {
-    type Err = anyhow::Error;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().chars().last() {
-            Some('s') => Ok(Self::seconds(s.strip_suffix("s").unwrap().trim().parse()?)),
-            Some('m') => Ok(Self::minutes(s.strip_suffix("m").unwrap().trim().parse()?)),
-            Some('h') => Ok(Self::hours(s.strip_suffix("h").unwrap().trim().parse()?)),
-            Some('D') => Ok(Self::days(s.strip_suffix("D").unwrap().trim().parse()?)),
-            Some('W') => Ok(Self::weeks(s.strip_suffix("W").unwrap().trim().parse()?)),
-            Some('M') => Ok(Self::months(s.strip_suffix("M").unwrap().trim().parse()?)),
-            Some('Y') => Ok(Self::years(s.strip_suffix("Y").unwrap().trim().parse()?)),
-            _ => Err(anyhow::anyhow!("could not parse '{:?}' as duration", s)),
+        let suffix = match s.trim().chars().last() {
+            Some('s') => 's',
+            Some('m') => 'm',
+            Some('h') => 'h',
+            Some('D') => 'D',
+            Some('W') => 'W',
+            Some('M') => 'M',
+            Some('Y') => 'Y',
+            _ => return Err(Error::FailedToParse(0)),
+        };
+
+        let time: i64 = match s.trim().strip_suffix(suffix).unwrap().parse() {
+            Ok(time) => time,
+            Err(_) => return Err(Error::FailedToParse(0)),
+        };
+
+        match suffix {
+            's' => Ok(Self::seconds(time)),
+            'm' => Ok(Self::minutes(time)),
+            'h' => Ok(Self::hours(time)),
+            'D' => Ok(Self::days(time)),
+            'W' => Ok(Self::weeks(time)),
+            'M' => Ok(Self::months(time)),
+            'Y' => Ok(Self::years(time)),
+            _ => unreachable!(),
         }
     }
 }

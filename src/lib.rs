@@ -9,3 +9,4 @@ pub mod stemmer;
 pub mod store;
 pub mod config;
 pub mod time;
+pub mod error;

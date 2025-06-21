@@ -97,7 +97,7 @@ impl Store {
         }
     }
 
-    pub fn close(&self, path: &Path) -> Result<(), anyhow::Error> {
+    pub fn close(&self, path: &Path) -> Result<(), std::io::Error> {
         let store = serde_json::to_string(self)?;
         std::fs::write(path, &store)?;
         Ok(())

@@ -26,7 +26,7 @@ enum Command {
     Search(search::Args),
 }
 
-pub fn run(context: &mut Context) -> Result<(), anyhow::Error> {
+pub fn run(context: &mut Context) {
     let args = Args::parse();
     context.output_format = args.format;
     match args.command {

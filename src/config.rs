@@ -1,3 +1,4 @@
+use crate::error::Error;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
@@ -66,7 +67,7 @@ base_directory = "$HOME"
     Config::open()
 }
 
-fn un_envvar_path(input: &str) -> Result<PathBuf, anyhow::Error> {
+fn un_envvar_path(input: &str) -> Result<PathBuf, Error> {
     let parents = input.trim().split("/");
 
     let mut path = PathBuf::new();
@@ -75,13 +76,7 @@ fn un_envvar_path(input: &str) -> Result<PathBuf, anyhow::Error> {
         if let Some('$') = parent.chars().next() {
             let parent = match std::env::var(&parent[1..]) {
                 Ok(var) => var,
-                Err(err) => {
-                    return Err(anyhow::anyhow!(
-                        "could not read environment variable: {:?}: error: {:?}",
-                        parent,
-                        err
-                    ));
-                }
+                Err(_) => return Err(Error::FailedToFindVar(parent.into())),
             };
             path.push(parent);
         } else {
@@ -91,8 +86,8 @@ fn un_envvar_path(input: &str) -> Result<PathBuf, anyhow::Error> {
     Ok(path)
 }
 
-fn parse_config(body: &str) -> Result<Config, anyhow::Error> {
-    let config_raw: ConfigRaw = toml::from_str(body)?;
+fn parse_config(body: &str) -> Config {
+    let config_raw: ConfigRaw = toml::from_str(body).unwrap();
 
     let store_path = match &config_raw.store_path {
         Some(path) => path.as_str(),
@@ -104,12 +99,13 @@ fn parse_config(body: &str) -> Result<Config, anyhow::Error> {
 
     let store_path = match un_envvar_path(store_path) {
         Ok(path) => path,
-        Err(err) => {
-            return Err(anyhow::anyhow!(
-                "could not build path to store, error: {:?}",
-                err
-            ));
-        }
+        Err(err) => match err {
+            Error::FailedToFindVar(var) => panic!(
+                "failed to resolve environment varialbe '{}' in config.store_path",
+                var
+            ),
+            _ => panic!("could not construct store_path"),
+        },
     };
 
     let ignore = config_raw.ignore.unwrap_or_else(|| {
@@ -123,19 +119,20 @@ fn parse_config(body: &str) -> Result<Config, anyhow::Error> {
         ]
     });
 
-    let ignore: Result<Vec<PathBuf>, anyhow::Error> = ignore
+    let ignore: Result<Vec<PathBuf>, Error> = ignore
         .into_iter()
         .map(|path| un_envvar_path(&path))
         .collect();
 
     let ignore = match ignore {
         Ok(ignore) => ignore,
-        Err(err) => {
-            return Err(anyhow::anyhow!(
-                "could not resolve environment variables in ignore list: {:?}",
-                err
-            ));
-        }
+        Err(err) => match err {
+            Error::FailedToFindVar(var) => panic!(
+                "failed to resolve environment variable '{}' in config.ignore",
+                var
+            ),
+            _ => panic!("could not resolve environment variables in ignore list"),
+        },
     };
 
     let base_directory = match &config_raw.base_directory {
@@ -162,12 +159,12 @@ fn parse_config(body: &str) -> Result<Config, anyhow::Error> {
         }
     };
 
-    Ok(Config {
+    Config {
         ignore_hidden_files,
         store_path,
         ignore,
         base_directory,
-    })
+    }
 }
 
 impl Config {
@@ -177,10 +174,7 @@ impl Config {
         match std::fs::read_to_string(&path) {
             Ok(body) => {
                 log::info!("read config file at: {:?}", path);
-                let config: Config = match parse_config(&body) {
-                    Ok(config) => config,
-                    Err(e) => panic!("could not parse config at: {:?}: error: {:?}", path, e),
-                };
+                let config = parse_config(&body);
                 log::info!("parsed config file at: {:?}", path);
                 config
             }

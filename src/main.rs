@@ -39,7 +39,7 @@ fn main() {
     };
 
     // TODO: log this
-    cli::run(&mut context).unwrap();
+    cli::run(&mut context);
 
     context.store.close(&context.config.store_path).unwrap();
 }
