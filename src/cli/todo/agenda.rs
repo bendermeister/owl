@@ -213,7 +213,9 @@ fn format_plain(agenda: &Agenda, path_length: PathLength) {
     println!("{}Overdue{}", red, reset);
     for todo in agenda.overdue.iter() {
         println!(
-            "\t{}{}{} TODO: {}",
+            "\t{}O{} {}{}{} TODO: {}",
+            red,
+            reset,
             gray,
             render_file(todo.file.clone(), todo.line_number),
             reset,
