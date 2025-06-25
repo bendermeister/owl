@@ -1,29 +1,20 @@
 use crate::time;
 use std::path::{Path, PathBuf};
 
-mod id;
-pub use id::ID;
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct File {
-    pub id: ID<Self>,
     pub path: PathBuf,
     pub modified: time::Stamp,
+    pub todos: Vec<Todo>,
 }
-
-impl id::IDAble for File {}
 
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Store {
-    pub file_id_max: u64,
-    pub term_id_max: u64,
     pub files: Vec<File>,
-    pub todos: Vec<Todo>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Todo {
-    pub file: ID<File>,
     pub line_number: usize,
     pub title: String,
     pub deadline: Option<time::Stamp>,
@@ -77,10 +68,5 @@ impl Store {
         let store = serde_json::to_string(self)?;
         std::fs::write(path, &store)?;
         Ok(())
-    }
-
-    pub fn file_id(&mut self) -> ID<File> {
-        self.file_id_max += 1;
-        ID::new(self.file_id_max)
     }
 }

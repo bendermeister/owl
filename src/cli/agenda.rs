@@ -1,10 +1,10 @@
+use crate::store::Todo;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use crate::context::Context;
 use crate::time::{Duration, Stamp};
-use crate::todo::Todo;
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
@@ -74,16 +74,16 @@ fn parse_timespan(part: &str) -> Stamp {
     panic!("failed to parse timespan");
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct Agenda {
-    overdue: Vec<Todo>,
-    entries: Vec<Entry>,
+#[derive(Debug, Clone, serde::Serialize)]
+struct Agenda<'a> {
+    overdue: Vec<(&'a Path, &'a str)>,
+    entries: Vec<Entry<'a>>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct Entry {
+#[derive(Debug, Clone, serde::Serialize)]
+struct Entry<'a> {
     stamp: Stamp,
-    todos: Vec<Todo>,
+    todos: Vec<(&'a Path, &'a str)>,
 }
 
 pub fn run(context: &Context, args: Args) {
@@ -132,58 +132,55 @@ pub fn run(context: &Context, args: Args) {
         iter = iter.add_duration(interval);
     }
 
-    let file_map = context
+    let extract_stamp = |todo: &Todo| match (todo.scheduled, todo.deadline) {
+        (Some(stamp), _) => Some(stamp),
+        (_, Some(stamp)) => Some(stamp),
+        _ => None,
+    };
+
+    let mut todos = context
         .store
         .files
         .iter()
-        .map(|file| (file.id, file.path.as_path()))
-        .collect::<HashMap<_, _>>();
+        .flat_map(|file| file.todos.iter().map(|todo| (file.path.as_path(), todo)))
+        .map(|(path, todo)| (path, extract_stamp(todo), todo.title.as_str()))
+        .filter(|(_, stamp, _)| stamp.is_some())
+        .map(|(path, stamp, title)| (path, stamp.unwrap(), title))
+        .filter(|(_, stamp, _)| *stamp <= end)
+        .collect::<Vec<_>>();
+
+    todos.sort_by(|(_, a, _), (_, b, _)| a.cmp(&b));
+
+    let mut todos = todos.into_iter().peekable();
 
     let mut agenda = Agenda {
         overdue: Vec::new(),
         entries,
     };
 
-    for todo in context.store.todos.iter() {
-        let stamp = match (todo.scheduled, todo.deadline) {
-            (Some(stamp), _) => stamp,
-            (_, Some(stamp)) => stamp,
-            _ => continue,
-        };
+    while let Some(true) = todos.peek().map(|(_, a, _)| *a < start) {
+        let todo = todos.next().unwrap();
+        agenda.overdue.push((todo.0, todo.2))
+    }
 
-        if stamp < start {
-            agenda.overdue.push(Todo {
-                title: todo.title.clone(),
-                file: file_map.get(&todo.file).unwrap().to_path_buf(),
-                deadline: todo.deadline,
-                scheduled: todo.scheduled,
-                line_number: todo.line_number,
-            });
-            continue;
-        }
+    for i in 0..agenda.entries.len() {
+        let limit = agenda
+            .entries
+            .get(i + 1)
+            .map(|entry| entry.stamp)
+            .unwrap_or_else(|| end.add_duration(Duration::days(1)));
 
-        if stamp > end {
-            continue;
-        }
-
-        for i in 0..agenda.entries.len() {
-            let limit = agenda
-                .entries
-                .get(i + 1)
-                .map(|e| e.stamp)
-                .unwrap_or_else(|| end.add_duration(Duration::days(1)));
-            if stamp < limit {
-                agenda.entries[i].todos.push(Todo {
-                    title: todo.title.clone(),
-                    file: file_map.get(&todo.file).unwrap().to_path_buf(),
-                    deadline: todo.deadline,
-                    scheduled: todo.scheduled,
-                    line_number: todo.line_number,
-                });
-                break;
-            }
+        while let Some(true) = todos.peek().map(|(_, stamp, _)| *stamp < limit) {
+            let todo = todos.next().unwrap();
+            agenda.entries[i].todos.push((todo.0, todo.2));
         }
     }
+
+    // TODO: continue here!
+
+    let mut i = 0;
+
+    while let Some((_, stamp, _)) = todos.peek() {}
 
     match context.output_format {
         crate::context::OutputFormat::Colorful => format_plain(&agenda, path_length),

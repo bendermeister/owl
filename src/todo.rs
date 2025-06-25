@@ -1,52 +1,40 @@
 use crate::error::Error;
 use crate::file_format::FileFormat;
+use crate::store::Todo;
 use crate::time;
-use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct Todo {
-    pub title: String,
-    pub file: PathBuf,
-    pub deadline: Option<time::Stamp>,
-    pub scheduled: Option<time::Stamp>,
-    pub line_number: usize,
-}
-
-impl Todo {
-    pub fn new(title: &str, file: PathBuf, line_number: usize) -> Self {
-        Self {
-            title: title.trim().to_owned(),
-            deadline: None,
-            scheduled: None,
-            line_number,
-            file,
-        }
-    }
-}
-
-pub fn parse_todos(body: &str, path: &Path) -> Result<Vec<Todo>, Error> {
-    match FileFormat::new(path) {
+pub fn parse_todos(body: &str, format: FileFormat) -> Result<Vec<Todo>, Error> {
+    match format {
         FileFormat::Unknown => Ok(Vec::new()),
-        FileFormat::Markdown => parse_todos_markdown(body, path),
-        FileFormat::Typst => parse_todos_typst(body, path),
-        FileFormat::C => parse_todos_clike(body, path),
-        FileFormat::CPP => parse_todos_clike(body, path),
-        FileFormat::Rust => parse_todos_clike(body, path),
-        FileFormat::Go => parse_todos_clike(body, path),
-        FileFormat::Java => parse_todos_clike(body, path),
-        FileFormat::JavaScript => parse_todos_clike(body, path),
-        FileFormat::TypeScript => parse_todos_clike(body, path),
-        FileFormat::CSharp => parse_todos_clike(body, path),
+        FileFormat::Markdown => parse_todos_markdown(body),
+        FileFormat::Typst => parse_todos_typst(body),
+        FileFormat::C => parse_todos_clike(body),
+        FileFormat::CPP => parse_todos_clike(body),
+        FileFormat::Rust => parse_todos_clike(body),
+        FileFormat::Go => parse_todos_clike(body),
+        FileFormat::Java => parse_todos_clike(body),
+        FileFormat::JavaScript => parse_todos_clike(body),
+        FileFormat::TypeScript => parse_todos_clike(body),
+        FileFormat::CSharp => parse_todos_clike(body),
     }
 }
 
-fn parse_todos_clike(body: &str, path: &Path) -> Result<Vec<Todo>, Error> {
+fn todo(title: String, line_number: usize) -> Todo {
+    Todo {
+        line_number,
+        title,
+        deadline: None,
+        scheduled: None,
+    }
+}
+
+fn parse_todos_clike(body: &str) -> Result<Vec<Todo>, Error> {
     let mut buf = Vec::new();
 
     for (line_number, line) in body.lines().map(|l| l.trim()).enumerate() {
         let line_number = line_number + 1;
         if let Some(title) = line.strip_prefix("// TODO:") {
-            buf.push(Todo::new(title, path.to_owned(), line_number));
+            buf.push(todo(title.into(), line_number));
         }
 
         if let Some(stamp) = line.strip_prefix("// - DEADLINE:") {
@@ -73,33 +61,33 @@ fn parse_todos_clike(body: &str, path: &Path) -> Result<Vec<Todo>, Error> {
     Ok(buf)
 }
 
-fn parse_todos_typst(body: &str, path: &Path) -> Result<Vec<Todo>, Error> {
+fn parse_todos_typst(body: &str) -> Result<Vec<Todo>, Error> {
     let mut buf = Vec::new();
 
     for (line_number, line) in body.lines().enumerate() {
         let line_number = line_number + 1;
         if let Some(title) = line.strip_prefix("= TODO:") {
-            buf.push(Todo::new(title, path.to_owned(), line_number));
+            buf.push(todo(title.into(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("== TODO:") {
-            buf.push(Todo::new(title, path.to_owned(), line_number));
+            buf.push(todo(title.into(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("=== TODO:") {
-            buf.push(Todo::new(title, path.to_owned(), line_number));
+            buf.push(todo(title.into(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("==== TODO:") {
-            buf.push(Todo::new(title, path.to_owned(), line_number));
+            buf.push(todo(title.into(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("===== TODO:") {
-            buf.push(Todo::new(title, path.to_owned(), line_number));
+            buf.push(todo(title.into(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("====== TODO:") {
-            buf.push(Todo::new(title, path.to_owned(), line_number));
+            buf.push(todo(title.into(), line_number));
         }
 
         if let Some(stamp) = line.strip_prefix("- DEADLINE:") {
@@ -126,33 +114,33 @@ fn parse_todos_typst(body: &str, path: &Path) -> Result<Vec<Todo>, Error> {
     Ok(buf)
 }
 
-fn parse_todos_markdown(body: &str, path: &Path) -> Result<Vec<Todo>, Error> {
+fn parse_todos_markdown(body: &str) -> Result<Vec<Todo>, Error> {
     let mut buf = Vec::new();
 
     for (line_number, line) in body.lines().enumerate() {
         let line_number = line_number + 1;
         if let Some(title) = line.strip_prefix("# TODO:") {
-            buf.push(Todo::new(title, path.to_owned(), line_number));
+            buf.push(todo(title.into(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("## TODO:") {
-            buf.push(Todo::new(title, path.to_owned(), line_number));
+            buf.push(todo(title.into(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("### TODO:") {
-            buf.push(Todo::new(title, path.to_owned(), line_number));
+            buf.push(todo(title.into(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("#### TODO:") {
-            buf.push(Todo::new(title, path.to_owned(), line_number));
+            buf.push(todo(title.into(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("##### TODO:") {
-            buf.push(Todo::new(title, path.to_owned(), line_number));
+            buf.push(todo(title.into(), line_number));
         }
 
         if let Some(title) = line.strip_prefix("##### TODO:") {
-            buf.push(Todo::new(title, path.to_owned(), line_number));
+            buf.push(todo(title.into(), line_number));
         }
 
         if let Some(stamp) = line.strip_prefix("> DEADLINE:") {
@@ -196,20 +184,16 @@ mod test {
 there should be some normal text here
 ";
 
-        let path: PathBuf = "/some/path/file.typ".into();
-
-        let got = parse_todos_markdown(&body, &path).unwrap();
+        let got = parse_todos_markdown(&body).unwrap();
         let expected = vec![
             Todo {
                 title: "first todo".into(),
-                file: path.clone(),
                 line_number: 3,
                 deadline: None,
                 scheduled: None,
             },
             Todo {
                 title: "second todo".into(),
-                file: path.clone(),
                 line_number: 4,
                 deadline: Some(time::Stamp::from_ymd_hm(2025, 12, 1, 12, 0).unwrap()),
                 scheduled: Some(time::Stamp::from_ymd_hm(2025, 11, 30, 14, 15).unwrap()),
@@ -217,13 +201,11 @@ there should be some normal text here
             Todo {
                 title: "third todo".into(),
                 line_number: 7,
-                file: path.clone(),
                 deadline: None,
                 scheduled: None,
             },
             Todo {
                 title: "fourth todo".into(),
-                file: path.clone(),
                 line_number: 8,
                 deadline: None,
                 scheduled: None,
@@ -248,19 +230,16 @@ there should be some normal text here
 there should be some normal text here
 ";
 
-        let path: PathBuf = "/some/path/file.typ".into();
-        let got = parse_todos_typst(&body, &path).unwrap();
+        let got = parse_todos_typst(&body).unwrap();
         let expected = vec![
             Todo {
                 title: "first todo".into(),
-                file: path.clone(),
                 line_number: 3,
                 deadline: None,
                 scheduled: None,
             },
             Todo {
                 title: "second todo".into(),
-                file: path.clone(),
                 line_number: 4,
                 deadline: Some(time::Stamp::from_ymd_hm(2025, 12, 1, 12, 0).unwrap()),
                 scheduled: Some(time::Stamp::from_ymd_hm(2025, 11, 30, 14, 15).unwrap()),
@@ -268,13 +247,11 @@ there should be some normal text here
             Todo {
                 title: "third todo".into(),
                 line_number: 7,
-                file: path.clone(),
                 deadline: None,
                 scheduled: None,
             },
             Todo {
                 title: "fourth todo".into(),
-                file: path.clone(),
                 line_number: 8,
                 deadline: None,
                 scheduled: None,

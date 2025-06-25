@@ -110,33 +110,34 @@ pub fn index(config: &Config, store: &mut Store, path: &Path) {
         }
     }
 
+    // Set of files currently present in the directory
     let file_set = files
         .iter()
-        .map(|f| f.path.as_path())
+        .map(|file| file.path.as_path())
         .collect::<HashSet<_>>();
 
-    // delete every file from database which is no longer present in actual file tree
+    // Remove all files from store which are no longer present on the file system
     store
         .files
         .retain(|file| file_set.contains(file.path.as_path()));
 
-    // find every file which was updated or created since last index
-
-    let store_map = store
+    // maps files to their modification time present in the store
+    let store_modified = store
         .files
         .iter()
-        .map(|file| (file.path.as_path(), file))
+        .map(|file| (file.path.as_path(), file.modified))
         .collect::<HashMap<_, _>>();
 
-    files.retain(|f| {
-        f.modified
-            > store_map
-                .get(f.path.as_path())
-                .map(|v| v.modified)
-                .unwrap_or(time::Stamp::new(0))
+    // keep only files which need to be updated
+    files.retain(|file| {
+        file.modified
+            > store_modified
+                .get(file.path.as_path())
+                .map(|v| *v)
+                .unwrap_or_else(|| time::Stamp::new(0))
     });
 
-    // those files need to be removed from the store
+    // remove every file which needs to be updated from the store
     let file_set = files
         .iter()
         .map(|file| file.path.as_path())
@@ -145,58 +146,36 @@ pub fn index(config: &Config, store: &mut Store, path: &Path) {
         .files
         .retain(|file| !file_set.contains(file.path.as_path()));
 
-    // get a hashset representing the files left in the store
-    let store_set = store
-        .files
-        .iter()
-        .map(|file| file.id)
-        .collect::<HashSet<_>>();
-
-    // remove todos of files which are no longer in thes store from the store
-    store.todos.retain(|t| store_set.contains(&t.file));
-
-    let files = files
-        .into_iter()
-        .map(|file| {
-            let body = match std::fs::read_to_string(&file.path) {
-                Ok(body) => Some(body),
-                Err(err) => {
-                    log::warn!(
-                        "error while trying to read file -> ignoring file: file: {:?}, error: {:?}",
-                        file.path,
-                        err
-                    );
-                    None
-                }
-            };
-            (file.path, file.modified, body)
-        })
-        .filter(|(_, _, b)| b.is_some())
-        .map(|(p, m, b)| (p, m, b.unwrap()));
-
-    for (path, modified, body) in files {
-        let todos = match todo::parse_todos(&body, &path) {
-            Ok(todos) => todos,
-            Err(err) => panic!("could not parse todos of: {:?}: error: {:?}", path, err),
+    let files = files.into_iter().map(|file| (file.path, file.modified));
+    for (path, modified) in files {
+        let body = match std::fs::read_to_string(&path) {
+            Ok(body) => body,
+            Err(err) => {
+                log::warn!("failed to read file: {:?}: {:?} ignoring", path, err);
+                continue;
+            }
         };
-        log::info!("parsed todos of: {:?}", path);
+        let todos = match todo::parse_todos(&body, FileFormat::new(&path)) {
+            Ok(todos) => todos,
+            Err(err) => {
+                log::warn!(
+                    "failed to parse todos in file: {:?}: {:?} ignoring file",
+                    path,
+                    err
+                );
+                continue;
+            }
+        };
 
-        let file_id = store.file_id();
-
-        store.files.push(store::File {
-            id: file_id,
+        let file = store::File {
             path,
             modified,
-        });
+            todos,
+        };
 
-        let todos = todos.into_iter().map(move |todo| store::Todo {
-            file: file_id,
-            line_number: todo.line_number,
-            title: todo.title,
-            deadline: todo.deadline,
-            scheduled: todo.scheduled,
-        });
-        store.todos.extend(todos);
+        store.files.push(file);
+
+        log::info!("finished indexing: {:?}", &path);
     }
 }
 
