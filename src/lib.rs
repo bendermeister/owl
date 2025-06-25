@@ -3,7 +3,6 @@ pub mod context;
 pub mod file_format;
 pub mod indexer;
 pub mod table;
-pub mod tfidf;
 pub mod todo;
 pub mod stemmer;
 pub mod store;

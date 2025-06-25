@@ -1,36 +1,39 @@
-use crate::context::Context;
-use crate::context::OutputFormat;
 use clap::Parser;
 
+use crate::context::{Context, OutputFormat};
+
+mod agenda;
+mod clocktime;
+mod list;
+
 #[derive(Debug, clap::Parser)]
-#[clap(author, version, about)]
-struct Args {
+pub struct Args {
     /// desired output format
     #[clap(long)]
     #[clap(value_enum, default_value_t = OutputFormat::Colorful)]
     format: OutputFormat,
 
+    /// todo commands
     #[clap(subcommand)]
     command: Command,
 }
 
-mod search;
-mod todo;
-
 #[derive(Debug, clap::Subcommand)]
 enum Command {
-    /// todo commands
-    Todo(todo::Args),
+    /// List all current todos
+    List(list::Args),
 
-    /// search for a phrase
-    Search(search::Args),
+    /// List todos sorted and grouped by there scheduled time and deadline
+    Agenda(agenda::Args),
 }
 
 pub fn run(context: &mut Context) {
+
     let args = Args::parse();
     context.output_format = args.format;
+
     match args.command {
-        Command::Todo(args) => todo::run(context, args),
-        Command::Search(args) => search::run(context, args),
+        Command::List(args) => list::run(&context, args),
+        Command::Agenda(args) => agenda::run(&context, args),
     }
 }
