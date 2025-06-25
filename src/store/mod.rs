@@ -13,35 +13,11 @@ pub struct File {
 
 impl id::IDAble for File {}
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct Term {
-    pub id: ID<Self>,
-    pub term: String,
-}
-
-impl id::IDAble for Term {}
-
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct TermFrequency {
-    pub term: ID<Term>,
-    pub file: ID<File>,
-    pub frequency: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct InverseDocumentFrequency {
-    pub term: ID<Term>,
-    pub frequency: u64,
-}
-
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Store {
     pub file_id_max: u64,
     pub term_id_max: u64,
     pub files: Vec<File>,
-    pub terms: Vec<Term>,
-    pub term_frequencies: Vec<TermFrequency>,
-    pub inverse_document_frequencies: Vec<InverseDocumentFrequency>,
     pub todos: Vec<Todo>,
 }
 
@@ -106,10 +82,5 @@ impl Store {
     pub fn file_id(&mut self) -> ID<File> {
         self.file_id_max += 1;
         ID::new(self.file_id_max)
-    }
-
-    pub fn term_id(&mut self) -> ID<Term> {
-        self.term_id_max += 1;
-        ID::new(self.term_id_max)
     }
 }

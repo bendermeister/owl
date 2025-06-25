@@ -38,7 +38,6 @@ fn main() {
         output_format: OutputFormat::Colorful,
     };
 
-    // TODO: log this
     cli::run(&mut context);
 
     context.store.close(&context.config.store_path).unwrap();

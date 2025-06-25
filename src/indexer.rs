@@ -2,7 +2,6 @@ use crate::config::Config;
 use crate::file_format::FileFormat;
 use crate::store;
 use crate::store::Store;
-use crate::tfidf;
 use crate::time;
 use crate::todo;
 use fast_glob::glob_match;
@@ -153,24 +152,6 @@ pub fn index(config: &Config, store: &mut Store, path: &Path) {
         .map(|file| file.id)
         .collect::<HashSet<_>>();
 
-    // idfs of terms which where present in files which are no longer in the store need to be
-    // updated later
-    let mut idf_to_update = store
-        .term_frequencies
-        .iter()
-        .filter(|tf| !store_set.contains(&tf.file))
-        .map(|tf| (tf.term, 0))
-        .collect::<HashMap<_, _>>();
-
-    store
-        .inverse_document_frequencies
-        .retain(|idf| !idf_to_update.contains_key(&idf.term));
-
-    // remove term frequencies of files which are no longer in the store from the store
-    store
-        .term_frequencies
-        .retain(|tf| store_set.contains(&tf.file));
-
     // remove todos of files which are no longer in thes store from the store
     store.todos.retain(|t| store_set.contains(&t.file));
 
@@ -200,9 +181,6 @@ pub fn index(config: &Config, store: &mut Store, path: &Path) {
         };
         log::info!("parsed todos of: {:?}", path);
 
-        let term_frequencies = tfidf::term_histogram(&body, &path);
-        log::info!("parsed term frequencies of: {:?}", path);
-
         let file_id = store.file_id();
 
         store.files.push(store::File {
@@ -219,63 +197,7 @@ pub fn index(config: &Config, store: &mut Store, path: &Path) {
             scheduled: todo.scheduled,
         });
         store.todos.extend(todos);
-
-        let current_terms = store
-            .terms
-            .iter()
-            .map(|t| (t.term.as_str(), t.id))
-            .collect::<HashMap<_, _>>();
-
-        let mut new_terms = Vec::new();
-        let mut old_terms = Vec::new();
-
-        for (term, frequency) in term_frequencies.into_iter() {
-            if let Some(id) = current_terms.get(term.as_str()) {
-                old_terms.push((*id, frequency));
-            } else {
-                new_terms.push((term, frequency));
-            }
-        }
-
-        let old_terms = old_terms
-            .into_iter()
-            .map(|(id, freq)| store::TermFrequency {
-                term: id,
-                file: file_id,
-                frequency: freq,
-            });
-
-        store.term_frequencies.extend(old_terms);
-
-        for (term, frequency) in new_terms.into_iter() {
-            let term_id = store.term_id();
-            idf_to_update.insert(term_id, 0);
-            store.terms.push(store::Term { id: term_id, term });
-            store.term_frequencies.push(store::TermFrequency {
-                term: term_id,
-                file: file_id,
-                frequency,
-            });
-        }
     }
-
-    for tf in store.term_frequencies.iter() {
-        if let Some(count) = idf_to_update.get_mut(&tf.term) {
-            *count += 1;
-        }
-    }
-
-    let document_count = store.files.len() as u64;
-
-    let idf_to_update =
-        idf_to_update
-            .into_iter()
-            .map(|(term, idf)| store::InverseDocumentFrequency {
-                term,
-                frequency: document_count - idf,
-            });
-
-    store.inverse_document_frequencies.extend(idf_to_update);
 }
 
 #[cfg(test)]
