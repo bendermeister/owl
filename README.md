@@ -2,14 +2,16 @@
 # owl
 My favourite things from Org Mode without a dependency on Emacs
 
-only cargo probably works too but you have to have the necessary rust toolchain and sqlite3 drivers intalled
-
 ## Features
-### Task System
+### Task System / Agenda
 ```sh
 owl agenda
 ```
-Lists all todos present in markdown files in the given directory. A todo is written as: 
+Will produce an overview over your current tasks with their individual
+scheduled times, and deadlines. It looks for tasks in every markdown file in
+its search path which can be configured.
+
+A file like this
 
 ```markdown
 # Uni
@@ -30,12 +32,20 @@ Lists all todos present in markdown files in the given directory. A todo is writ
 > SCHEDULED: 2025-07-02 16:30
 ```
 
-### Search
-```sh
-owl 'path/to/owl/directory' search 'this is the search phrase'
+would produce the following output:
+
 ```
-
-outputs all files currently present in the given directory sorted by tf-idf on the search phrase.
-
-## Roadmap
-see Issues
+Overdue
+Sat 28 Jun 2025
+Sun 29 Jun 2025
+Mon 30 Jun 2025
+  Uni/Course 1      S       Exercise 1
+Tue 01 Jul 2025
+  Uni/Course 1      S       Exercise 2
+  Uni/Course 2      S 13:00 Project 1 (D 2025-07-02 12:00)
+Wed 02 Jul 2025
+  Uni/Course 2      S 13:00 Project 2
+  Uni/Course 2      S 16:30 Test 3
+Thu 03 Jul 2025
+Fri 04 Jul 2025
+```
