@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 
 use crate::error::Error;
 
@@ -38,6 +38,16 @@ impl From<Duration> for ClockTime {
         let minutes = minutes % 60;
 
         Self { hours, minutes }
+    }
+}
+
+impl Display for ClockTime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.minutes == 0 && self.hours == 0 {
+            write!(f, "     ")
+        } else {
+            write!(f, "{:>02}:{:>02}", self.hours, self.minutes)
+        }
     }
 }
 
@@ -98,7 +108,4 @@ mod test {
         let got = "".parse::<ClockTime>();
         assert!(got.is_err());
     }
-
-
-
 }

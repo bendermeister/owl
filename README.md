@@ -23,6 +23,11 @@ Lists all todos present in markdown files in the given directory. A todo is writ
 ## Course 2
 ### TASK: Project 1
 > DEADLINE: 2025-07-02 12:00
+> SCHEDULED: 2025-07-01 13:00
+### TASK: Project 2
+> SCHEDULED: 2025-07-02 13:00
+### TASK: Test 3
+> SCHEDULED: 2025-07-02 16:30
 ```
 
 ### Search

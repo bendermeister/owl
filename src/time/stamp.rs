@@ -88,6 +88,15 @@ impl Stamp {
         Self::from_ymd_hm(year, month, day, 0, 0)
     }
 
+    pub fn to_clocktime(&self) -> ClockTime {
+        let day = self.to_day();
+        let stamp = self.stamp - day.stamp;
+        let minutes = stamp / 60;
+        let hours = minutes / 60;
+        let minutes = minutes % 60;
+        ClockTime::from_hm(hours, minutes).unwrap()
+    }
+
     pub fn from_ymd_hm(year: i32, month: u32, day: u32, hour: u32, minute: u32) -> Option<Self> {
         let date = NaiveDate::from_ymd_opt(year, month, day)?;
         let time = NaiveTime::from_hms_opt(hour, minute, 0)?;

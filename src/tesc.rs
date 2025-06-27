@@ -20,7 +20,6 @@ pub fn strikethrough() -> &'static str {
 pub fn red() -> &'static str {
     "\x1b[31m"
 }
-
 pub fn green() -> &'static str {
     "\x1b[32m"
 }
