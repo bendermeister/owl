@@ -49,7 +49,7 @@ impl Stamp {
 
         if dt.hour() == 0 && dt.minute() == 0 {
             format!(
-                "{} {} {} {}",
+                "{} {:>02} {} {}",
                 dt.weekday(),
                 dt.day(),
                 months[dt.month0() as usize],
@@ -86,6 +86,15 @@ impl Stamp {
 
     pub fn from_ymd(year: i32, month: u32, day: u32) -> Option<Self> {
         Self::from_ymd_hm(year, month, day, 0, 0)
+    }
+
+    pub fn to_clocktime(&self) -> ClockTime {
+        let day = self.to_day();
+        let stamp = self.stamp - day.stamp;
+        let minutes = stamp / 60;
+        let hours = minutes / 60;
+        let minutes = minutes % 60;
+        ClockTime::from_hm(hours, minutes).unwrap()
     }
 
     pub fn from_ymd_hm(year: i32, month: u32, day: u32, hour: u32, minute: u32) -> Option<Self> {
@@ -181,14 +190,14 @@ impl FromStr for Stamp {
             Some("yesterday") => Some(Self::today().add_duration(Duration::days(-1))),
             Some(a) => match parse_yyyymmdd(a) {
                 Some((y, m, d)) => Self::from_ymd(y as i32, m as u32, d as u32),
-                None => return Err(Error::FailedToParse(0)),
+                None => return Err(Error::ParsingError(None)),
             },
-            None => return Err(Error::FailedToParse(0)),
+            None => return Err(Error::ParsingError(None)),
         };
 
         let mut base = match base {
             Some(base) => base,
-            None => return Err(Error::FailedToParse(0)),
+            None => return Err(Error::ParsingError(None)),
         };
 
         if let Some(time) = s.next() {
@@ -197,7 +206,7 @@ impl FromStr for Stamp {
         }
 
         if s.next().is_some() {
-            return Err(Error::FailedToParse(0));
+            return Err(Error::ParsingError(None));
         }
 
         Ok(base)
