@@ -23,12 +23,12 @@ impl FromStr for Duration {
             Some('W') => 'W',
             Some('M') => 'M',
             Some('Y') => 'Y',
-            _ => return Err(Error::FailedToParse(0)),
+            _ => return Err(Error::ParsingError(None)),
         };
 
         let time: i64 = match s.trim().strip_suffix(suffix).unwrap().trim().parse() {
             Ok(time) => time,
-            Err(_) => return Err(Error::FailedToParse(0)),
+            Err(_) => return Err(Error::ParsingError(None)),
         };
 
         match suffix {

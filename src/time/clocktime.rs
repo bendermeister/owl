@@ -49,17 +49,17 @@ impl FromStr for ClockTime {
 
         let hours = match s.next() {
             Some(Ok(v)) => v,
-            _ => return Err(Error::FailedToParse(0)),
+            _ => return Err(Error::ParsingError(None)),
         };
 
         let minutes = match s.next() {
             Some(Ok(v)) => v,
-            _ => return Err(Error::FailedToParse(0)),
+            _ => return Err(Error::ParsingError(None)),
         };
 
         match Self::from_hm(hours, minutes) {
             Some(v) => Ok(v),
-            _ => Err(Error::FailedToParse(0)),
+            _ => Err(Error::ParsingError(None)),
         }
     }
 }

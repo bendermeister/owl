@@ -49,7 +49,7 @@ impl Stamp {
 
         if dt.hour() == 0 && dt.minute() == 0 {
             format!(
-                "{} {} {} {}",
+                "{} {:>02} {} {}",
                 dt.weekday(),
                 dt.day(),
                 months[dt.month0() as usize],
@@ -181,14 +181,14 @@ impl FromStr for Stamp {
             Some("yesterday") => Some(Self::today().add_duration(Duration::days(-1))),
             Some(a) => match parse_yyyymmdd(a) {
                 Some((y, m, d)) => Self::from_ymd(y as i32, m as u32, d as u32),
-                None => return Err(Error::FailedToParse(0)),
+                None => return Err(Error::ParsingError(None)),
             },
-            None => return Err(Error::FailedToParse(0)),
+            None => return Err(Error::ParsingError(None)),
         };
 
         let mut base = match base {
             Some(base) => base,
-            None => return Err(Error::FailedToParse(0)),
+            None => return Err(Error::ParsingError(None)),
         };
 
         if let Some(time) = s.next() {
@@ -197,7 +197,7 @@ impl FromStr for Stamp {
         }
 
         if s.next().is_some() {
-            return Err(Error::FailedToParse(0));
+            return Err(Error::ParsingError(None));
         }
 
         Ok(base)

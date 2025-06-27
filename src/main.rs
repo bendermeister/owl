@@ -1,8 +1,7 @@
-use owl::cli;
-use owl::config::Config;
-use owl::context::{Context, OutputFormat};
-use owl::indexer;
-use owl::store::Store;
+use std::path::PathBuf;
+
+use clap::Parser;
+use owl::{cli, config::Config, indexer, store::Store};
 
 fn logger_init() {
     let level = if let Ok(level) = std::env::var("LOG_LEVEL") {
@@ -24,21 +23,34 @@ fn logger_init() {
 }
 
 fn main() {
+
     logger_init();
 
-    let config = Config::open();
+    // TODO: delete unwrap
+    let mut path: PathBuf = std::env::var("HOME").unwrap().into();
+    path.push(".config");
+    path.push("owl");
 
-    let mut store = Store::open(&config.store_path);
+    path.push("config.toml");
+    let config = Config::open(&path);
+    path.pop();
 
-    indexer::index(&config, &mut store, config.base_directory.as_path());
+    log::info!("read config");
 
-    let mut context = Context {
-        store,
-        config,
-        output_format: OutputFormat::Colorful,
-    };
+    path.push("store.json");
+    let mut store = Store::open(&path);
+    path.pop();
 
-    cli::run(&mut context);
+    log::info!("read store");
 
-    context.store.close(&context.config.store_path).unwrap();
+    indexer::index(&mut store, &config);
+
+    log::info!("scanned directories");
+
+    let args = cli::Args::parse();
+
+    cli::run(&config, &store, &args);
+
+    path.push("store.json");
+    store.close(&path);
 }

@@ -2,35 +2,27 @@
 # owl
 My favourite things from Org Mode without a dependency on Emacs
 
-## How to Build
-### Debug
-```sh
-nix develop
-cargo build
-```
-
-### Release
-```sh
-nix develop
-cargo build --release
-```
-
 only cargo probably works too but you have to have the necessary rust toolchain and sqlite3 drivers intalled
 
 ## Features
-### Todo
+### Task System
 ```sh
-owl 'path/to/owl/directory' todo list
+owl agenda
 ```
 Lists all todos present in markdown files in the given directory. A todo is written as: 
+
 ```markdown
-# TODO: this is a todo
+# Uni
 
-## TODO: this is a todo with a deadline
-> DEADLINE: 2025-06-20 12:00
+## Course 1
+### TASK: Exercise 1
+> SCHEDULED: today
+### TASK: Exercise 2
+> SCHEDULED: 2025-07-01
 
-## TODO: this is a todo with a scheduled time
-> SCHEDULED: 2025-06-20 12:00
+## Course 2
+### TASK: Project 1
+> DEADLINE: 2025-07-02 12:00
 ```
 
 ### Search
