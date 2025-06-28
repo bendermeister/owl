@@ -126,6 +126,7 @@ impl Task {
     /// ";
     ///
     /// let expected = Task {
+    ///     subtasks: vec![],
     ///     prefix: "Uni/Course 1".into(),
     ///     title: "Exercise 1".into(),
     ///     path: "/home/user/journal/uni.md".into(),
@@ -229,6 +230,7 @@ mod test {
 ### TASK: Exercise 1
 ";
         let expected = vec![Task {
+            subtasks: vec![],
             prefix: "Uni/Course 1".into(),
             title: "Exercise 1".into(),
             path: path.into(),
