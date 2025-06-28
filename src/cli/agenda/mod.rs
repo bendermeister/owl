@@ -64,10 +64,10 @@ pub fn run(_: &Config, store: &Store, args: &Args) {
         _ => None,
     };
 
-    let glob_filter = args.glob.as_ref().map(|s| s.as_str()).unwrap_or("**");
+    let glob_filter = args.glob.as_deref().unwrap_or("**");
     let glob_filter = |task: &Task| glob_match(glob_filter.as_bytes(), task.prefix.as_bytes());
 
-    let prefix_filter = args.prefix.as_ref().map(|s| s.as_str()).unwrap_or("");
+    let prefix_filter = args.prefix.as_deref().unwrap_or("");
     let prefix_filter = |task: &Task| task.prefix.starts_with(prefix_filter);
 
     let mut start = time::Stamp::today();

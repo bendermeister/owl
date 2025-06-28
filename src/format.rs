@@ -33,7 +33,7 @@ impl Format {
 
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
         let path: &Path = path.as_ref();
-        match path.extension().map(|ext| ext.to_str()).flatten() {
+        match path.extension().and_then(|ext| ext.to_str()) {
             Some("md") => Self::Markdown,
             Some("typ") => Self::Typst,
             Some("java") => Self::Java,

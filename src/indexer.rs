@@ -49,7 +49,7 @@ pub fn index(store: &mut Store, config: &Config) {
             if config.ignore_hidden_files {
                 let name = path
                     .components()
-                    .last()
+                    .next_back()
                     .unwrap()
                     .as_os_str()
                     .as_encoded_bytes();
@@ -100,7 +100,7 @@ pub fn index(store: &mut Store, config: &Config) {
             // we don't support such platforms
             let mtime: time::Stamp = mtime.modified().unwrap().into();
 
-            if let Some(last_mtime) = mtime_map.get((&path).as_path()) {
+            if let Some(last_mtime) = mtime_map.get(path.as_path()) {
                 if *last_mtime >= mtime {
                     log::info!(
                         "ignoring: file {:?} because it has not changed since last scan",
