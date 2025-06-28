@@ -1,5 +1,8 @@
 use crate::{format::Format, time};
-use std::path::{Path, PathBuf};
+use std::{
+    fmt::Display,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct Task {
@@ -10,6 +13,35 @@ pub struct Task {
     pub deadline: Option<time::Stamp>,
     pub scheduled: Option<time::Stamp>,
     pub line_number: usize,
+    pub subtasks: Vec<SubTask>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum SubTask {
+    Done(String),
+    NotDone(String),
+}
+
+impl SubTask {
+    pub fn is_done(&self) -> bool {
+        match self {
+            SubTask::Done(_) => true,
+            SubTask::NotDone(_) => false,
+        }
+    }
+
+    pub fn is_not_done(&self) -> bool {
+        !self.is_done()
+    }
+}
+
+impl Display for SubTask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SubTask::Done(title) => write!(f, "- [X] {}", title),
+            SubTask::NotDone(title) => write!(f, "- [ ] {}", title),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -23,6 +55,7 @@ impl<'a> PrefixBuffer<'a> {
             buffer: Vec::with_capacity(6),
         }
     }
+
     fn pop_to(&mut self, level: usize) {
         match self.buffer.last() {
             Some((last_level, _)) if *last_level >= level => {
@@ -58,6 +91,7 @@ impl Task {
             sources: None,
             deadline: None,
             scheduled: None,
+            subtasks: vec![],
             line_number,
         }
     }
@@ -135,6 +169,18 @@ impl Task {
             }
             if let Some(line) = line.strip_prefix("###### ") {
                 Self::handle_heading(line, path, line_number, 6, &mut prefix, &mut tasks);
+            }
+
+            if let Some(subtask) = line.strip_prefix("- [X]") {
+                if let Some(task) = tasks.last_mut() {
+                    task.subtasks.push(SubTask::Done(subtask.trim().into()))
+                }
+            }
+
+            if let Some(subtask) = line.strip_prefix("- [ ]") {
+                if let Some(task) = tasks.last_mut() {
+                    task.subtasks.push(SubTask::NotDone(subtask.trim().into()))
+                }
             }
 
             if let Some(stamp) = line.strip_prefix("> DEADLINE:") {

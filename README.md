@@ -28,6 +28,8 @@ A file like this
 > SCHEDULED: 2025-07-01 13:00
 ### TASK: Project 2
 > SCHEDULED: 2025-07-02 13:00
+- [X] find a title
+- [ ] actually write the thing
 ### TASK: Test 3
 > SCHEDULED: 2025-07-02 16:30
 ```

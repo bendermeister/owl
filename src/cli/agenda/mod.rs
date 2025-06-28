@@ -1,5 +1,3 @@
-use fast_glob::glob_match;
-
 use crate::tesc::*;
 use crate::{
     config::Config,
@@ -10,13 +8,12 @@ use crate::{
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
-    /// filter for a specific prefix with a glob
-    #[clap(long)]
-    glob: Option<String>,
-
     /// filter for a specific prefix
     #[clap(long)]
     prefix: Option<String>,
+
+    #[clap(long)]
+    subtask: bool,
 }
 
 struct Agenda<'a> {
@@ -29,14 +26,13 @@ struct Entry<'a> {
     tasks: Vec<&'a Task>,
 }
 
-fn task_print(task: &Task, prefix_pad: usize) {
-    let prefix_pad = prefix_pad - task.prefix.len();
+fn task_print(task: &Task, prefix_pad: usize, subtask: bool) {
     print!(
         "  {}{}{}{} ",
         magenta(),
         task.prefix,
         reset(),
-        " ".repeat(prefix_pad)
+        " ".repeat(prefix_pad - task.prefix.len())
     );
 
     if let Some(stamp) = task.scheduled {
@@ -51,10 +47,23 @@ fn task_print(task: &Task, prefix_pad: usize) {
 
     print!("{}", task.title);
 
-    if let Some(stamp) = task.deadline {
-        print!(" ({}{}D{} {})", red(), bold(), reset(), stamp);
+    if !task.subtasks.is_empty() {
+        let is_done = task.subtasks.iter().filter(|t| t.is_done()).count();
+        print!(" [{}/{}]", is_done, task.subtasks.len());
     }
-    println!()
+
+    if task.scheduled.is_some() {
+        if let Some(stamp) = task.deadline {
+            print!(" ({}{}D{} {})", red(), bold(), reset(), stamp);
+        }
+    }
+    println!();
+
+    if subtask {
+        for subtask in task.subtasks.iter() {
+            println!("{}           {}", " ".repeat(prefix_pad),  subtask);
+        }
+    }
 }
 
 pub fn run(_: &Config, store: &Store, args: &Args) {
@@ -63,9 +72,6 @@ pub fn run(_: &Config, store: &Store, args: &Args) {
         (_, Some(stamp)) => Some(stamp),
         _ => None,
     };
-
-    let glob_filter = args.glob.as_deref().unwrap_or("**");
-    let glob_filter = |task: &Task| glob_match(glob_filter.as_bytes(), task.prefix.as_bytes());
 
     let prefix_filter = args.prefix.as_deref().unwrap_or("");
     let prefix_filter = |task: &Task| task.prefix.starts_with(prefix_filter);
@@ -80,7 +86,6 @@ pub fn run(_: &Config, store: &Store, args: &Args) {
         .filter(|(stamp, _)| stamp.is_some())
         .map(|(stamp, task)| (stamp.unwrap(), task))
         .filter(|(stamp, _)| *stamp < end)
-        .filter(|(_, task)| glob_filter(task))
         .filter(|(_, task)| prefix_filter(task))
         .collect::<Vec<_>>();
 
@@ -124,12 +129,12 @@ pub fn run(_: &Config, store: &Store, args: &Args) {
 
     println!("{}{}Overdue{}", red(), bold(), reset());
     for task in agenda.overdue.iter() {
-        task_print(task, prefix_pad);
+        task_print(task, prefix_pad, args.subtask);
     }
     for entry in agenda.entries.iter() {
         println!("{}{}{}", bold(), entry.stamp.to_pretty_string(), reset());
         for task in entry.tasks.iter() {
-            task_print(task, prefix_pad);
+            task_print(task, prefix_pad, args.subtask);
         }
     }
 }
