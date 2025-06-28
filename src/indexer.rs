@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+};
 
 use crate::{config::Config, file::File, format::Format, store::Store, task, time, todo};
 
@@ -17,14 +20,16 @@ pub fn index(store: &mut Store, config: &Config) {
         );
     }
 
-    let mtime_map = store
+    let mut mtime_map = store
         .files
-        .iter()
-        .map(|file| (file.path.as_path(), file.mtime))
+        .iter_mut()
+        .map(|file| (file.path.as_path(), &mut file.mtime))
         .collect::<HashMap<_, _>>();
 
     let mut directories = vec![config.base_directory.clone()];
     let mut files = vec![];
+
+    let now = time::Stamp::now();
 
     while let Some(directory) = directories.pop() {
         let read_dir = match std::fs::read_dir(&directory) {
@@ -100,12 +105,13 @@ pub fn index(store: &mut Store, config: &Config) {
             // we don't support such platforms
             let mtime: time::Stamp = mtime.modified().unwrap().into();
 
-            if let Some(last_mtime) = mtime_map.get(path.as_path()) {
-                if *last_mtime >= mtime {
+            if let Some(last_mtime) = mtime_map.get_mut(path.as_path()) {
+                if **last_mtime >= mtime {
                     log::info!(
                         "ignoring: file {:?} because it has not changed since last scan",
                         path
                     );
+                    **last_mtime = now;
                     continue;
                 }
             }
@@ -114,20 +120,28 @@ pub fn index(store: &mut Store, config: &Config) {
         }
     }
 
+    // remove files from store which will be updated
+
     let file_set = files
         .iter()
         .map(|(path, _)| path.as_path())
         .collect::<HashSet<_>>();
 
+    let to_remove = store
+        .files
+        .iter()
+        .filter(|file| file.mtime < now)
+        .map(|file| file.path.as_path())
+        .collect::<HashSet<_>>();
+
+    let retain = |path: &Path| !file_set.contains(path) && !to_remove.contains(path);
+
+    store.tasks.retain(|task| retain(task.path.as_path()));
+    store.todos.retain(|todo| retain(todo.path.as_path()));
+
     store
         .files
-        .retain(|file| !file_set.contains(file.path.as_path()));
-    store
-        .todos
-        .retain(|todo| !file_set.contains(todo.path.as_path()));
-    store
-        .tasks
-        .retain(|task| !file_set.contains(task.path.as_path()));
+        .retain(|file| !file_set.contains(file.path.as_path()) && file.mtime >= now);
 
     for (path, mtime) in files.into_iter() {
         let body = match std::fs::read_to_string(&path) {
