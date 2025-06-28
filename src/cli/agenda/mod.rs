@@ -7,7 +7,11 @@ use crate::{
 };
 
 #[derive(Debug, clap::Args)]
-pub struct Args {}
+pub struct Args {
+    /// filter for a specific prefix
+    #[clap(long)]
+    prefix: Option<String>,
+}
 
 struct Agenda<'a> {
     overdue: Vec<&'a Task>,
@@ -47,12 +51,14 @@ fn task_print(task: &Task, prefix_pad: usize) {
     println!()
 }
 
-pub fn run(_: &Config, store: &Store, _: &Args) {
+pub fn run(_: &Config, store: &Store, args: &Args) {
     let get_stamp = |task: &Task| match (task.scheduled, task.deadline) {
         (Some(stamp), _) => Some(stamp),
         (_, Some(stamp)) => Some(stamp),
         _ => None,
     };
+
+    let prefix_filter = args.prefix.as_ref().map(|s| s.as_str()).unwrap_or("**");
 
     let mut start = time::Stamp::today();
     let end = start.add_duration(Duration::days(7));
@@ -64,6 +70,7 @@ pub fn run(_: &Config, store: &Store, _: &Args) {
         .filter(|(stamp, _)| stamp.is_some())
         .map(|(stamp, task)| (stamp.unwrap(), task))
         .filter(|(stamp, _)| *stamp < end)
+        .filter(|(_, task)| fast_glob::glob_match(prefix_filter.as_bytes(), task.prefix.as_bytes()))
         .collect::<Vec<_>>();
 
     let prefix_pad = tasks
@@ -103,7 +110,6 @@ pub fn run(_: &Config, store: &Store, _: &Args) {
         }
         agenda.entries.push(entry);
     }
-
 
     println!("{}{}Overdue{}", red(), bold(), reset());
     for task in agenda.overdue.iter() {
