@@ -57,7 +57,7 @@ pub fn run(_: &Config, store: &Store, _: &Args) {
     let mut start = time::Stamp::today();
     let end = start.add_duration(Duration::days(7));
 
-    let mut tasks = store
+    let tasks = store
         .tasks
         .iter()
         .map(|task| (get_stamp(task), task))
