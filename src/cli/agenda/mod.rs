@@ -1,3 +1,5 @@
+use fast_glob::glob_match;
+
 use crate::tesc::*;
 use crate::{
     config::Config,
@@ -8,6 +10,10 @@ use crate::{
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
+    /// filter for a specific prefix with a glob
+    #[clap(long)]
+    glob: Option<String>,
+
     /// filter for a specific prefix
     #[clap(long)]
     prefix: Option<String>,
@@ -58,7 +64,11 @@ pub fn run(_: &Config, store: &Store, args: &Args) {
         _ => None,
     };
 
-    let prefix_filter = args.prefix.as_ref().map(|s| s.as_str()).unwrap_or("**");
+    let glob_filter = args.glob.as_ref().map(|s| s.as_str()).unwrap_or("**");
+    let glob_filter = |task: &Task| glob_match(glob_filter.as_bytes(), task.prefix.as_bytes());
+
+    let prefix_filter = args.prefix.as_ref().map(|s| s.as_str()).unwrap_or("");
+    let prefix_filter = |task: &Task| task.prefix.starts_with(prefix_filter);
 
     let mut start = time::Stamp::today();
     let end = start.add_duration(Duration::days(7));
@@ -70,7 +80,8 @@ pub fn run(_: &Config, store: &Store, args: &Args) {
         .filter(|(stamp, _)| stamp.is_some())
         .map(|(stamp, task)| (stamp.unwrap(), task))
         .filter(|(stamp, _)| *stamp < end)
-        .filter(|(_, task)| fast_glob::glob_match(prefix_filter.as_bytes(), task.prefix.as_bytes()))
+        .filter(|(_, task)| glob_filter(task))
+        .filter(|(_, task)| prefix_filter(task))
         .collect::<Vec<_>>();
 
     let prefix_pad = tasks
