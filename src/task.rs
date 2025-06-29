@@ -67,7 +67,6 @@ impl<'a> PrefixBuffer<'a> {
     }
 
     fn push(&mut self, level: usize, prefix: &'a str) {
-        self.pop_to(level);
         self.buffer.push((level, prefix));
     }
 
@@ -105,6 +104,7 @@ impl Task {
         tasks: &mut Vec<Task>,
     ) {
         let line = line.trim();
+        prefix.pop_to(heading_level);
 
         if let Some(title) = line.strip_prefix("TASK:") {
             let title = title.trim().into();

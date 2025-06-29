@@ -12,8 +12,18 @@ pub struct Args {
     #[clap(long)]
     prefix: Option<String>,
 
+    /// should subtasks be listed or not
     #[clap(long)]
     subtask: bool,
+
+    /// until which date the agenda should  be generated
+    /// possible formats:
+    /// - "<x>D" x number of days after start
+    /// - "<x>W" x number of weeks after start
+    /// - "<x>M" x number of months after start
+    /// - "<x>Y" x number of years after start 
+    #[clap(long, verbatim_doc_comment)]
+    until: Option<String>,
 }
 
 struct Agenda<'a> {
@@ -57,13 +67,26 @@ fn task_print(task: &Task, prefix_pad: usize, subtask: bool) {
             print!(" ({}{}D{} {})", red(), bold(), reset(), stamp);
         }
     }
+
     println!();
 
     if subtask {
         for subtask in task.subtasks.iter() {
-            println!("{}           {}", " ".repeat(prefix_pad),  subtask);
+            println!("{}           {}", " ".repeat(prefix_pad), subtask);
         }
     }
+}
+
+fn parse_until(until: &str, start: time::Stamp) -> time::Stamp {
+    match until.parse::<time::Stamp>() {
+        Ok(until) => return until,
+        Err(_) => (),
+    };
+    match until.parse::<time::Duration>() {
+        Ok(until) => return start.add_duration(until),
+        Err(_) => (),
+    };
+    panic!("could not evaluate --until flag");
 }
 
 pub fn run(_: &Config, store: &Store, args: &Args) {
@@ -77,7 +100,9 @@ pub fn run(_: &Config, store: &Store, args: &Args) {
     let prefix_filter = |task: &Task| task.prefix.starts_with(prefix_filter);
 
     let mut start = time::Stamp::today();
-    let end = start.add_duration(Duration::days(7));
+
+    let until = args.until.as_deref().unwrap_or("7D");
+    let end = parse_until(until, start);
 
     let mut tasks = store
         .tasks
