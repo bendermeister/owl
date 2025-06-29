@@ -79,7 +79,7 @@ pub fn run(_: &Config, store: &Store, args: &Args) {
     let mut start = time::Stamp::today();
     let end = start.add_duration(Duration::days(7));
 
-    let tasks = store
+    let mut tasks = store
         .tasks
         .iter()
         .map(|task| (get_stamp(task), task))
@@ -88,6 +88,8 @@ pub fn run(_: &Config, store: &Store, args: &Args) {
         .filter(|(stamp, _)| *stamp < end)
         .filter(|(_, task)| prefix_filter(task))
         .collect::<Vec<_>>();
+
+    tasks.sort_by(|(a, _), (b, _)| a.cmp(b));
 
     let prefix_pad = tasks
         .iter()
