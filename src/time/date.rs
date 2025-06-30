@@ -34,12 +34,43 @@ impl PartialOrd for Date {
 }
 
 impl Date {
+    pub fn to_month_begin(&self) -> Self {
+        Self {
+            year: self.year,
+            month: self.month,
+            day: 1,
+        }
+    }
+
+    pub fn to_month_end(&self) -> Self {
+        let mli = if is_leap_year(self.year) { 1 } else { 0 };
+
+        Self {
+            year: self.year,
+            month: self.month,
+            day: MONTH_LENGTHS[mli][self.month as usize],
+        }
+    }
+
     // TODO: doc this
     pub fn from_ymd(year: u16, month: u8, day: u8) -> Option<Self> {
         if !is_date_valid(year, month, day) {
             return None;
         }
         Some(Self { year, month, day })
+    }
+
+    pub fn sub_duration(&self, duration: Duration) -> Option<Self> {
+        let date = self.to_naive_date();
+
+        let date = match duration {
+            Duration::Day(d) => date.checked_sub_days(chrono::Days::new(d))?,
+            Duration::Week(w) => date.checked_sub_days(chrono::Days::new(w * 7))?,
+            Duration::Month(m) => date.checked_sub_months(chrono::Months::new(m as u32))?,
+            Duration::Year(y) => date.checked_sub_months(chrono::Months::new(y as u32 * 12))?,
+        };
+
+        Some(Self::from_naive_date(date))
     }
 
     pub fn add_duration(&self, duration: Duration) -> Option<Self> {

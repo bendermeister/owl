@@ -4,6 +4,7 @@ use crate::{config::Config, store::Store};
 
 mod agenda;
 mod task;
+mod timeline;
 mod todo;
 
 #[derive(Parser, Debug)]
@@ -12,7 +13,6 @@ pub struct Args {
     #[clap(subcommand)]
     command: Command,
 }
-
 
 #[derive(Debug, clap::Subcommand)]
 enum Command {
@@ -24,6 +24,9 @@ enum Command {
 
     /// task subcommand
     Task(task::Args),
+
+    /// timeline subcommand
+    Timeline(timeline::Args),
 }
 
 pub fn run(config: &Config, store: &Store, args: &Args) {
@@ -31,5 +34,6 @@ pub fn run(config: &Config, store: &Store, args: &Args) {
         Command::Todo(args) => todo::run(config, store, args),
         Command::Agenda(args) => agenda::run(config, store, args),
         Command::Task(args) => task::run(config, store, args),
+        Command::Timeline(args) => timeline::run(config, store, args),
     }
 }

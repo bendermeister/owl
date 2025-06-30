@@ -36,6 +36,15 @@ pub struct Task {
     pub subtasks: Vec<SubTask>,
 }
 
+impl Display for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            State::Task => write!(f, "TASK"),
+            State::Done => write!(f, "DONE"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum SubTask {
     Done(String),

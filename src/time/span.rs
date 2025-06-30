@@ -46,7 +46,7 @@ impl FromStr for Span {
 
 impl Span {
     /// contructs a new Span instance
-    fn new(date: Date, start: Option<ClockTime>, end: Option<ClockTime>) -> Self {
+    pub fn new(date: Date, start: Option<ClockTime>, end: Option<ClockTime>) -> Self {
         Self { date, start, end }
     }
 }
