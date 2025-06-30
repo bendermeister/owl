@@ -115,6 +115,7 @@ pub fn run(_: &Config, store: &Store, args: &Args) {
     let mut tasks = store
         .tasks
         .iter()
+        .filter(|task| task.state.is_open())
         .map(|task| (get_stamp(task), task))
         .filter(|(stamp, _)| stamp.is_some())
         .map(|(stamp, task)| (stamp.unwrap(), task))

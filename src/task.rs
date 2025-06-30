@@ -4,8 +4,28 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub enum State {
+    Task,
+    Done,
+}
+
+impl State {
+    pub fn is_open(&self) -> bool {
+        match self {
+            State::Task => true,
+            State::Done => false,
+        }
+    }
+
+    pub fn is_closed(&self) -> bool {
+        !self.is_open()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct Task {
+    pub state: State,
     pub path: PathBuf,
     pub prefix: String,
     pub title: String,
@@ -82,9 +102,10 @@ impl<'a> PrefixBuffer<'a> {
 }
 
 impl Task {
-    fn new(title: String, prefix: String, path: PathBuf, line_number: usize) -> Self {
+    fn new(state: State, title: String, prefix: String, path: PathBuf, line_number: usize) -> Self {
         Self {
             prefix,
+            state,
             title,
             path,
             sources: None,
@@ -108,7 +129,22 @@ impl Task {
 
         if let Some(title) = line.strip_prefix("TASK:") {
             let title = title.trim().into();
-            tasks.push(Self::new(title, prefix.read(), path.into(), line_number));
+            tasks.push(Self::new(
+                State::Task,
+                title,
+                prefix.read(),
+                path.into(),
+                line_number,
+            ));
+        } else if let Some(title) = line.strip_prefix("DONE:") {
+            let title = title.trim().into();
+            tasks.push(Self::new(
+                State::Done,
+                title,
+                prefix.read(),
+                path.into(),
+                line_number,
+            ));
         } else {
             prefix.push(heading_level, line);
         }
