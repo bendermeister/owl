@@ -29,7 +29,7 @@ pub fn index(store: &mut Store, config: &Config) {
     let mut directories = vec![config.base_directory.clone()];
     let mut files = vec![];
 
-    let now = time::Stamp::now();
+    let now = std::time::SystemTime::now();
 
     while let Some(directory) = directories.pop() {
         let read_dir = match std::fs::read_dir(&directory) {
@@ -103,7 +103,7 @@ pub fn index(store: &mut Store, config: &Config) {
 
             // unwrap is ok because it only fails if mtime is not available on platform
             // we don't support such platforms
-            let mtime: time::Stamp = mtime.modified().unwrap().into();
+            let mtime = mtime.modified().unwrap();
 
             if let Some(last_mtime) = mtime_map.get_mut(path.as_path()) {
                 if **last_mtime >= mtime {

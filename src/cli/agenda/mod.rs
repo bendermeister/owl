@@ -1,9 +1,10 @@
 use crate::tesc::*;
+use crate::time::ClockTime;
 use crate::{
     config::Config,
     store::Store,
     task::Task,
-    time::{self, Duration},
+    time::{Date, Duration, Span},
 };
 
 #[derive(Debug, clap::Args)]
@@ -18,10 +19,10 @@ pub struct Args {
 
     /// until which date the agenda should  be generated
     /// possible formats:
-    /// - "<x>D" x number of days after start
-    /// - "<x>W" x number of weeks after start
-    /// - "<x>M" x number of months after start
-    /// - "<x>Y" x number of years after start 
+    /// - "<x>d" x number of days after start
+    /// - "<x>w" x number of weeks after start
+    /// - "<x>m" x number of months after start
+    /// - "<x>y" x number of years after start
     #[clap(long, verbatim_doc_comment)]
     until: Option<String>,
 }
@@ -32,8 +33,17 @@ struct Agenda<'a> {
 }
 
 struct Entry<'a> {
-    stamp: time::Stamp,
+    stamp: Date,
     tasks: Vec<&'a Task>,
+}
+
+fn clock_range_format(start: Option<ClockTime>, end: Option<ClockTime>) -> String {
+    match (start, end) {
+        (Some(start), Some(end)) => format!("{} - {}", start, end),
+        (Some(start), None) => format!("{}        ", start),
+        (None, Some(end)) => format!("        {}", end),
+        (None, None) => " ".repeat(13),
+    }
 }
 
 fn task_print(task: &Task, prefix_pad: usize, subtask: bool) {
@@ -45,14 +55,12 @@ fn task_print(task: &Task, prefix_pad: usize, subtask: bool) {
         " ".repeat(prefix_pad - task.prefix.len())
     );
 
-    if let Some(stamp) = task.scheduled {
-        let stamp = stamp.to_clocktime();
+    if let Some(span) = task.scheduled {
         print!("{}{}S{} ", green(), bold(), reset());
-        print!("{}{}{} ", green(), stamp, reset());
-    } else if let Some(stamp) = task.deadline {
-        let stamp = stamp.to_clocktime();
+        print!("{} ", clock_range_format(span.start, span.end));
+    } else if let Some(span) = task.deadline {
         print!("{}{}D{} ", red(), bold(), reset());
-        print!("{}{}{} ", red(), stamp, reset());
+        print!("{} ", clock_range_format(span.start, span.end));
     }
 
     print!("{}", task.title);
@@ -63,8 +71,14 @@ fn task_print(task: &Task, prefix_pad: usize, subtask: bool) {
     }
 
     if task.scheduled.is_some() {
-        if let Some(stamp) = task.deadline {
-            print!(" ({}{}D{} {})", red(), bold(), reset(), stamp);
+        if let Some(span) = task.deadline {
+            print!(
+                " ({}{}D{} {})",
+                red(),
+                bold(),
+                reset(),
+                span.date.to_pretty_string().trim()
+            );
         }
     }
 
@@ -77,16 +91,15 @@ fn task_print(task: &Task, prefix_pad: usize, subtask: bool) {
     }
 }
 
-fn parse_until(until: &str, start: time::Stamp) -> time::Stamp {
-    match until.parse::<time::Stamp>() {
+fn parse_until(until: &str, start: Date) -> Date {
+    match until.parse::<Date>() {
         Ok(until) => return until,
         Err(_) => (),
     };
-    match until.parse::<time::Duration>() {
-        Ok(until) => return start.add_duration(until),
-        Err(_) => (),
-    };
-    panic!("could not evaluate --until flag");
+    let duration = until.parse().expect("could not evaluate --until flag");
+    start
+        .add_duration(duration)
+        .expect("could not evaluate --until flag")
 }
 
 pub fn run(_: &Config, store: &Store, args: &Args) {
@@ -99,9 +112,9 @@ pub fn run(_: &Config, store: &Store, args: &Args) {
     let prefix_filter = args.prefix.as_deref().unwrap_or("");
     let prefix_filter = |task: &Task| task.prefix.starts_with(prefix_filter);
 
-    let mut start = time::Stamp::today();
+    let mut start = Date::today();
 
-    let until = args.until.as_deref().unwrap_or("7D");
+    let until = args.until.as_deref().unwrap_or("7d");
     let end = parse_until(until, start);
 
     let mut tasks = store
@@ -110,7 +123,7 @@ pub fn run(_: &Config, store: &Store, args: &Args) {
         .map(|task| (get_stamp(task), task))
         .filter(|(stamp, _)| stamp.is_some())
         .map(|(stamp, task)| (stamp.unwrap(), task))
-        .filter(|(stamp, _)| *stamp < end)
+        .filter(|(stamp, _)| stamp.date < end)
         .filter(|(_, task)| prefix_filter(task))
         .collect::<Vec<_>>();
 
@@ -129,13 +142,13 @@ pub fn run(_: &Config, store: &Store, args: &Args) {
 
     let mut tasks = &tasks[..];
 
-    let today = time::Stamp::today();
-    while !tasks.is_empty() && tasks[0].0 < today {
+    let today = Date::today();
+    while !tasks.is_empty() && tasks[0].0.date < today {
         agenda.overdue.push(tasks[0].1);
         tasks = &tasks[1..];
     }
 
-    while !tasks.is_empty() && tasks[0].0 < start {
+    while !tasks.is_empty() && tasks[0].0.date < start {
         tasks = &tasks[1..];
     }
 
@@ -145,9 +158,9 @@ pub fn run(_: &Config, store: &Store, args: &Args) {
             tasks: Vec::with_capacity(tasks.len()),
         };
 
-        start = start.add_duration(Duration::days(1));
+        start = start.add_duration(Duration::Day(1)).unwrap();
 
-        while !tasks.is_empty() && tasks[0].0 < start {
+        while !tasks.is_empty() && tasks[0].0.date < start {
             entry.tasks.push(tasks[0].1);
             tasks = &tasks[1..];
         }
