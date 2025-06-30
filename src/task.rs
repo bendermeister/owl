@@ -26,6 +26,7 @@ impl State {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct Task {
     pub state: State,
+    pub work: Vec<Span>,
     pub path: PathBuf,
     pub prefix: String,
     pub title: String,
@@ -121,6 +122,7 @@ impl Task {
             deadline: None,
             scheduled: None,
             subtasks: vec![],
+            work: vec![],
             line_number,
         }
     }
@@ -163,7 +165,7 @@ impl Task {
     ///
     /// # Example
     /// ```
-    /// use owl::task::Task;
+    /// use owl::task::{Task, State};
     /// let body = "
     /// ## Uni
     /// ### Course 1
@@ -172,6 +174,8 @@ impl Task {
     ///
     /// let expected = Task {
     ///     subtasks: vec![],
+    ///     state: State::Task,
+    ///     work: vec![],
     ///     prefix: "Uni/Course 1".into(),
     ///     title: "Exercise 1".into(),
     ///     path: "/home/user/journal/uni.md".into(),
@@ -229,35 +233,45 @@ impl Task {
                 }
             }
 
-            if let Some(stamp) = line.strip_prefix("> DEADLINE:") {
-                let stamp = match stamp.trim().parse::<Span>() {
-                    Ok(stamp) => stamp,
-                    Err(err) => {
-                        log::warn!("ignoring parsing error in deadline: {:?}", err);
-                        continue;
+            if let Some(line) = line.strip_prefix(">") {
+                let line = line.trim();
+                if let Some(deadline) = line.strip_prefix("DEADLINE:") {
+                    let deadline = match deadline.trim().parse::<Span>() {
+                        Ok(deadline) => deadline,
+                        Err(err) => {
+                            log::warn!("ignoring parsing error in deadline: {:?}", err);
+                            continue;
+                        }
+                    };
+                    if let Some(task) = tasks.last_mut() {
+                        task.deadline = Some(deadline);
                     }
-                };
-                if let Some(task) = tasks.last_mut() {
-                    task.deadline = Some(stamp);
-                }
-            }
-
-            if let Some(span) = line.strip_prefix("> SCHEDULED:") {
-                let span = match span.trim().parse::<Span>() {
-                    Ok(s) => s,
-                    Err(err) => {
-                        log::warn!("ignoring parsing error in scheduled: {:?}", err);
-                        continue;
+                } else if let Some(scheduled) = line.strip_prefix("SCHEDULED:") {
+                    let scheduled = match scheduled.trim().parse::<Span>() {
+                        Ok(scheduled) => scheduled,
+                        Err(err) => {
+                            log::warn!("ignoring parsing error in scheduled: {:?}", err);
+                            continue;
+                        }
+                    };
+                    if let Some(task) = tasks.last_mut() {
+                        task.scheduled = Some(scheduled);
                     }
-                };
-                if let Some(task) = tasks.last_mut() {
-                    task.scheduled = Some(span);
+                } else if let Some(work) = line.strip_prefix("WORK:") {
+                    let work = match work.trim().parse::<Span>() {
+                        Ok(work) => work,
+                        Err(err) => {
+                            log::warn!("ignoring parsing error in work: {:?}", err);
+                            continue;
+                        }
+                    };
+                    if let Some(task) = tasks.last_mut() {
+                        task.work.push(work);
+                    }
                 }
             }
         }
-
         log::info!("parsed tasks from file: {:?}", path);
-
         tasks
     }
 }
@@ -276,6 +290,8 @@ mod test {
 ";
         let expected = vec![Task {
             subtasks: vec![],
+            work: vec![],
+            state: State::Task,
             prefix: "Uni/Course 1".into(),
             title: "Exercise 1".into(),
             path: path.into(),
