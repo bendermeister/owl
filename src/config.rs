@@ -62,7 +62,6 @@ ignore = [
 
 # whether or not hidden files and directories should be ignored
 ignore_hidden_files = true
-
 "#;
         assert!(path.is_absolute());
 
