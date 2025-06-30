@@ -14,17 +14,17 @@ impl Display for ClockTime {
 
 impl PartialOrd for ClockTime {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        if self.hour != other.hour {
-            self.hour.partial_cmp(&other.hour)
-        } else {
-            self.minute.partial_cmp(&other.minute)
-        }
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for ClockTime {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
+        if self.hour != other.hour {
+            self.hour.cmp(&other.hour)
+        } else {
+            self.minute.cmp(&other.minute)
+        }
     }
 }
 
@@ -68,7 +68,7 @@ fn is_valid_clocktime(hour: u8, minute: u8) -> bool {
     if minute > 59 {
         return false;
     }
-    return true;
+    true
 }
 
 impl FromStr for ClockTime {

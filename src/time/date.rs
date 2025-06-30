@@ -13,23 +13,23 @@ pub struct Date {
 
 impl Ord for Date {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
+        if self.year != other.year {
+            self.year.cmp(&other.year)
+        } else if self.month != other.month {
+            self.month.cmp(&other.month)
+        } else {
+            self.day.cmp(&other.day)
+        }
     }
 }
 
-const MONTH_LITERALS: [&'static str; 13] = [
+const MONTH_LITERALS: [&str; 13] = [
     "", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
 impl PartialOrd for Date {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        if self.year != other.year {
-            self.year.partial_cmp(&other.year)
-        } else if self.month != other.month {
-            self.month.partial_cmp(&other.month)
-        } else {
-            self.day.partial_cmp(&other.day)
-        }
+        Some(self.cmp(other))
     }
 }
 
@@ -95,7 +95,7 @@ fn is_leap_year(year: u16) -> bool {
     if year % 4 == 0 {
         return true;
     }
-    return false;
+    false
 }
 
 const MONTH_LENGTHS: [[u8; 13]; 2] = [
@@ -121,7 +121,7 @@ fn is_date_valid(year: u16, month: u8, day: u8) -> bool {
         return false;
     }
 
-    return true;
+    true
 }
 
 impl FromStr for Date {

@@ -3,7 +3,7 @@ use std::{
     path::Path,
 };
 
-use crate::{config::Config, file::File, format::Format, store::Store, task, time, todo};
+use crate::{config::Config, file::File, format::Format, store::Store, task, todo};
 
 /// recursively discoveres every file starting from `config.base_directory` checks if it needs to
 /// be reparsed based on the `mtime` stored in the associated `store.files` and updates

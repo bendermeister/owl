@@ -1,11 +1,7 @@
 use crate::tesc::*;
 use crate::time::ClockTime;
-use crate::{
-    config::Config,
-    store::Store,
-    task::Task,
-    time::{Date, Duration, Span},
-};
+use crate::time::Date;
+use crate::{config::Config, store::Store, task::Task, time::Duration};
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
@@ -92,10 +88,9 @@ fn task_print(task: &Task, prefix_pad: usize, subtask: bool) {
 }
 
 fn parse_until(until: &str, start: Date) -> Date {
-    match until.parse::<Date>() {
-        Ok(until) => return until,
-        Err(_) => (),
-    };
+    if let Ok(until) = until.parse() {
+        return until;
+    }
     let duration = until.parse().expect("could not evaluate --until flag");
     start
         .add_duration(duration)

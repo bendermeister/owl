@@ -53,26 +53,26 @@ impl Span {
 
 impl PartialOrd for Span {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match self.date.cmp(&other.date) {
-            Ordering::Less => return Some(Ordering::Less),
-            Ordering::Equal => (),
-            Ordering::Greater => return Some(Ordering::Greater),
-        };
-
-        match (self.start, other.start) {
-            (Some(_), None) => return Some(Ordering::Less),
-            (None, Some(_)) => return Some(Ordering::Less),
-            (None, None) => return Some(Ordering::Equal),
-            _ => (),
-        };
-
-        self.start.unwrap().partial_cmp(&other.start.unwrap())
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for Span {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
+        match self.date.cmp(&other.date) {
+            Ordering::Less => return Ordering::Less,
+            Ordering::Equal => (),
+            Ordering::Greater => return Ordering::Greater,
+        };
+
+        match (self.start, other.start) {
+            (Some(_), None) => return Ordering::Less,
+            (None, Some(_)) => return Ordering::Less,
+            (None, None) => return Ordering::Equal,
+            _ => (),
+        };
+
+        self.start.unwrap().cmp(&other.start.unwrap())
     }
 }
 
