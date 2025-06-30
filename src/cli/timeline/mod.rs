@@ -9,7 +9,7 @@ use crate::{
 #[derive(Debug, clap::Args)]
 pub struct Args {
     /// start of the timeline format: YYYY-MM-DD
-    from: String,
+    from: Option<String>,
 
     /// end of th timeline format: YYYY-MM-DD
     to: Option<String>,
@@ -38,7 +38,7 @@ fn task_print(task: &Task, prefix_pad: usize) {
     println!();
 }
 
-pub fn get_from_and_to(args: &Args) -> (Date, Date) {
+pub fn get_from_and_to(from: Option<&str>, to: Option<&str>) -> (Date, Date) {
     let from_month = |month| {
         let today = Date::today();
         if month < today.month {
@@ -48,8 +48,9 @@ pub fn get_from_and_to(args: &Args) -> (Date, Date) {
         }
     };
 
-    match (args.from.as_str(), args.to.as_deref()) {
-        ("last", Some("month")) => {
+    match (from.unwrap_or(""), to.unwrap_or("")) {
+        ("", "") => return get_from_and_to(Some("this"), Some("month")),
+        ("last", "month") => {
             let from = Date::today()
                 .sub_duration(Duration::Month(1))
                 .unwrap()
@@ -58,51 +59,54 @@ pub fn get_from_and_to(args: &Args) -> (Date, Date) {
             return (from, to);
         }
 
-        ("this", Some("month")) => {
+        ("this", "month") => {
             let from = Date::today().to_month_begin();
             let to = Date::today().to_month_end();
             return (from, to);
         }
 
-        ("month", None) => {
+        ("month", "") => {
             let from = Date::today().to_month_begin();
             let to = from.to_month_end();
             return (from, to);
         }
 
-        ("jan", None) | ("january", None) => return from_month(1),
-        ("feb", None) | ("february", None) => return from_month(2),
-        ("mar", None) | ("march", None) => return from_month(3),
-        ("apr", None) | ("april", None) => return from_month(4),
-        ("may", None) => return from_month(5),
-        ("jun", None) | ("june", None) => return from_month(6),
-        ("jul", None) | ("july", None) => return from_month(7),
-        ("aug", None) | ("august", None) => return from_month(8),
-        ("sep", None) | ("september", None) => return from_month(9),
-        ("oct", None) | ("october", None) => return from_month(10),
-        ("nov", None) | ("november", None) => return from_month(11),
-        ("dec", None) | ("december", None) => return from_month(12),
+        ("jan", "") | ("january", "") => return from_month(1),
+        ("feb", "") | ("february", "") => return from_month(2),
+        ("mar", "") | ("march", "") => return from_month(3),
+        ("apr", "") | ("april", "") => return from_month(4),
+        ("may", "") => return from_month(5),
+        ("jun", "") | ("june", "") => return from_month(6),
+        ("jul", "") | ("july", "") => return from_month(7),
+        ("aug", "") | ("august", "") => return from_month(8),
+        ("sep", "") | ("september", "") => return from_month(9),
+        ("oct", "") | ("october", "") => return from_month(10),
+        ("nov", "") | ("november", "") => return from_month(11),
+        ("dec", "") | ("december", "") => return from_month(12),
         _ => (),
     }
 
-    let from: Date = args
-        .from
+    // unwrap is ok here because if this would be None then `to` must be None too therefore the
+    // default match earlier would have hit
+    //
+    // because we got to this point this cannot be the case so this cannot be None
+    let from: Date = from
+        .unwrap()
         .parse()
         .expect("<from> is not a date: expected format: 'YYYY-MM-DD'");
 
-    let mut to = Date::today();
-
-    if let Some(date) = &args.to {
-        to = date
+    let to = match to {
+        Some(to) => to
             .parse()
-            .expect("<to> is not a date: expected format: 'YYYY-MM-DD'")
-    }
+            .expect("<to> is not a date: expected format: 'YYYY-MM-DD'"),
+        None => Date::today(),
+    };
 
     (from, to)
 }
 
 pub fn run(_: &Config, store: &Store, args: &Args) {
-    let (mut from, to) = get_from_and_to(args);
+    let (mut from, to) = get_from_and_to(args.from.as_deref(), args.to.as_deref());
 
     let prefix = args.prefix.as_deref().unwrap_or("");
 
