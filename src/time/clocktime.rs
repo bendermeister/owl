@@ -1,76 +1,104 @@
-use std::{fmt::Display, str::FromStr};
+use std::{cmp::Ordering, fmt::Display, str::FromStr};
 
-use crate::error::Error;
-
-use super::Duration;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct ClockTime {
-    hours: i64,
-    minutes: i64,
-}
-
-impl ClockTime {
-    pub fn from_hm(hours: i64, minutes: i64) -> Option<Self> {
-        if !(0..=23).contains(&hours) {
-            return None;
-        }
-        if !(0..=59).contains(&minutes) {
-            return None;
-        }
-        Some(Self { hours, minutes })
-    }
-
-    pub fn hours(&self) -> i64 {
-        self.hours
-    }
-
-    pub fn minutes(&self) -> i64 {
-        self.minutes
-    }
-}
-
-impl From<Duration> for ClockTime {
-    fn from(duration: Duration) -> Self {
-        let seconds = duration.to_seconds();
-        let minutes = seconds / 60;
-        let hours = minutes / 60;
-        let minutes = minutes % 60;
-
-        Self { hours, minutes }
-    }
+    pub hour: u8,
+    pub minute: u8,
 }
 
 impl Display for ClockTime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.minutes == 0 && self.hours == 0 {
-            write!(f, "     ")
+        write!(f, "{:>02}:{:>02}", self.hour, self.minute)
+    }
+}
+
+impl PartialOrd for ClockTime {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ClockTime {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.hour != other.hour {
+            self.hour.cmp(&other.hour)
         } else {
-            write!(f, "{:>02}:{:>02}", self.hours, self.minutes)
+            self.minute.cmp(&other.minute)
         }
     }
 }
 
+impl ClockTime {
+    /// Constructs a new `ClockTime` from `hour` and `minute`
+    ///
+    /// # Returns
+    /// - `None` if `hour` and `minute` do not form a valid `ClockTime`
+    /// - `Some(_)` otherwise
+    ///
+    /// # Example
+    /// ```
+    /// use owl::time::ClockTime;
+    ///
+    /// let time = ClockTime::from_hm(20, 51).unwrap();
+    ///
+    /// assert_eq!(time, ClockTime {hour: 20, minute: 51});
+    ///
+    /// let time = ClockTime::from_hm(100, 0);
+    /// assert!(time.is_none());
+    /// ```
+    pub fn from_hm(hour: u8, minute: u8) -> Option<Self> {
+        if !is_valid_clocktime(hour, minute) {
+            return None;
+        }
+        Some(Self { hour, minute })
+    }
+}
+
+/// checks whether or not a clocktime is valid
+///
+/// a valid clocktime is defined as 00:00 - 23:59
+///
+/// # Returns
+/// - `true` if `hour` and `minute` form valid clocktime
+/// - `false` otherwise
+fn is_valid_clocktime(hour: u8, minute: u8) -> bool {
+    if hour > 23 {
+        return false;
+    }
+    if minute > 59 {
+        return false;
+    }
+    true
+}
+
 impl FromStr for ClockTime {
-    type Err = Error;
+    // TODO: this is not good error handling
+    type Err = ();
+
+    // TODO: should we support am/pm tomfoolery?
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut s = s.trim().split(":").map(|p| p.parse::<i64>());
+        let mut parts = s.trim().split(":").map(|n| n.parse());
 
-        let hours = match s.next() {
+        let hour = match parts.next() {
             Some(Ok(v)) => v,
-            _ => return Err(Error::ParsingError(None)),
+            _ => return Err(()),
         };
 
-        let minutes = match s.next() {
+        let minute = match parts.next() {
             Some(Ok(v)) => v,
-            _ => return Err(Error::ParsingError(None)),
+            _ => return Err(()),
         };
 
-        match Self::from_hm(hours, minutes) {
-            Some(v) => Ok(v),
-            _ => Err(Error::ParsingError(None)),
+        if parts.next().is_some() {
+            return Err(());
         }
+
+        if !is_valid_clocktime(hour, minute) {
+            return Err(());
+        }
+
+        Ok(ClockTime { hour, minute })
     }
 }
 
@@ -79,33 +107,36 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_parse() {
-        let got = "12:30".parse::<ClockTime>().unwrap();
-        let expected = ClockTime::from_hm(12, 30).unwrap();
-        assert_eq!(expected, got);
+    fn test_parse_valid() {
+        assert_eq!(
+            "12:24".parse::<ClockTime>().unwrap(),
+            ClockTime {
+                hour: 12,
+                minute: 24
+            }
+        );
+        assert_eq!(
+            "01:30".parse::<ClockTime>().unwrap(),
+            ClockTime {
+                hour: 1,
+                minute: 30
+            }
+        );
+        assert_eq!(
+            "23:59".parse::<ClockTime>().unwrap(),
+            ClockTime {
+                hour: 23,
+                minute: 59
+            }
+        );
     }
 
     #[test]
-    fn test_parse_fail() {
-        let got = "-1:30".parse::<ClockTime>();
-        assert!(got.is_err());
-
-        let got = "24:30".parse::<ClockTime>();
-        assert!(got.is_err());
-
-        let got = "12:-1".parse::<ClockTime>();
-        assert!(got.is_err());
-
-        let got = "12:60".parse::<ClockTime>();
-        assert!(got.is_err());
-
-        let got = "aaa".parse::<ClockTime>();
-        assert!(got.is_err());
-
-        let got = "1260".parse::<ClockTime>();
-        assert!(got.is_err());
-
-        let got = "".parse::<ClockTime>();
-        assert!(got.is_err());
+    fn test_parse_invalid() {
+        assert!("00::10".parse::<ClockTime>().is_err());
+        assert!("00::10".parse::<ClockTime>().is_err());
+        assert!("24:00".parse::<ClockTime>().is_err());
+        assert!("-23:00".parse::<ClockTime>().is_err());
+        assert!("00:60".parse::<ClockTime>().is_err());
     }
 }

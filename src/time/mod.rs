@@ -1,7 +1,11 @@
-mod stamp;
-mod duration;
-mod clocktime;
+mod date;
+pub use date::Date;
 
-pub use duration::Duration;
-pub use stamp::Stamp;
+mod clocktime;
 pub use clocktime::ClockTime;
+
+mod duration;
+pub use duration::Duration;
+
+mod span;
+pub use span::Span;

@@ -1,4 +1,4 @@
-use crate::{format::Format, time};
+use crate::{format::Format, time::Span};
 use std::{
     fmt::Display,
     path::{Path, PathBuf},
@@ -10,8 +10,8 @@ pub struct Task {
     pub prefix: String,
     pub title: String,
     pub sources: Option<PathBuf>,
-    pub deadline: Option<time::Stamp>,
-    pub scheduled: Option<time::Stamp>,
+    pub deadline: Option<Span>,
+    pub scheduled: Option<Span>,
     pub line_number: usize,
     pub subtasks: Vec<SubTask>,
 }
@@ -185,10 +185,10 @@ impl Task {
             }
 
             if let Some(stamp) = line.strip_prefix("> DEADLINE:") {
-                let stamp: time::Stamp = match stamp.trim().parse() {
+                let stamp = match stamp.trim().parse::<Span>() {
                     Ok(stamp) => stamp,
                     Err(err) => {
-                        log::warn!("ignoring parsing error in scheduled: {:?}", err);
+                        log::warn!("ignoring parsing error in deadline: {:?}", err);
                         continue;
                     }
                 };
@@ -197,16 +197,16 @@ impl Task {
                 }
             }
 
-            if let Some(stamp) = line.strip_prefix("> SCHEDULED:") {
-                let stamp: time::Stamp = match stamp.trim().parse() {
-                    Ok(stamp) => stamp,
+            if let Some(span) = line.strip_prefix("> SCHEDULED:") {
+                let span = match span.trim().parse::<Span>() {
+                    Ok(s) => s,
                     Err(err) => {
                         log::warn!("ignoring parsing error in scheduled: {:?}", err);
                         continue;
                     }
                 };
                 if let Some(task) = tasks.last_mut() {
-                    task.scheduled = Some(stamp);
+                    task.scheduled = Some(span);
                 }
             }
         }
